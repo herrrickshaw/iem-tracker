@@ -88,6 +88,30 @@ data-centre addresses. Fix: disconnect NordVPN, or use its India location, or sp
 `iem ogd` / `iem registry`. One 2026 write-up also reports that the gateway firewall rejects default Python request headers, so
 send a descriptive User-Agent. Sources: dev.to "Scraping Indian Government Open Data in 2026", github.com/addypy/datagovindia (issue 9).
 
+## Complete LEI register check (10 October 2026)
+
+`gleif_bulk.py` pulled the whole GLEIF register for India through the public API with cursor paging (401,638 LEI records, 169,523
+with a usable MCA CIN, about 100 minutes at one request per second). `gleif_join.py` joined it offline onto every company, using
+former company names too, and refuses any CIN incorporated after the company's last filing.
+
+| Result | Companies |
+|---|---|
+| Matched by the web lookups | 23,015 |
+| Held in the LEI register (checkable) | 12,668 (55%) |
+| Same company: name and state matches | 94% |
+| Same company: name-only matches | 84% |
+| Different company with the same name (conflict) | 1,403 |
+| CIN updated (same company, new class or listing letter) | 971 |
+| New identifications from the LEI register | 2,056 (705 are Part B companies) |
+
+This replaces the earlier 300-company sample (88% and 76%), which was too pessimistic. Companies without an LEI, mostly small firms,
+cannot be checked and may carry a similar error. On confirmed companies the LEI entity status is ACTIVE for 97.4% and the LEI
+registration is current (ISSUED) for 90.7%; a current LEI is evidence the company is still operating.
+
+Sources tried and dropped: InstaFinancials serves a generic page after about ten rapid requests; Tofler returned HTTP 503 with a
+Cloudflare rate-limit page after about 800 pages and was not pushed further; the Apify actors mostly re-scrape Tofler or the stale
+OGD file, and the one with current MCA fields returned only about 17% of requested CINs per pass.
+
 ## Findings that still hold
 
 1. A name alone is not identity. The rule "CIN state code must equal IEM state" is kept for every auto-accept. State is now

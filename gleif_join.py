@@ -44,6 +44,7 @@ def main():
             if len(k) >= 4: by_key.setdefault(k, []).append(r)
     con = duckdb.connect(str(BASE / "iem_verify.duckdb"), read_only=True)
     co = con.execute("select id, key, name, state, cin, status, src, first_iem, last_iem, last_part_b, in_part_b from co where usable").df()
+    con.close()      # a read-only and a read-write handle on the same file cannot coexist in one process
     rows = []
     for r in co.itertuples(index=False):
         recs = by_key.get(r.key, [])

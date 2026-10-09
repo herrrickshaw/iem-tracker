@@ -84,8 +84,20 @@ def main():
         c = duckdb.connect(str(BASE / "iem_verify.duckdb"), read_only=True)
         co = c.execute("""select key k, coalesce(state,'') state, name, usable, in_part_b, n_part_a, n_part_b, last_iem, last_part_b,
                                  cin, status as mca_status, src as id_source from co""").df()
+        gv = c.execute("""select co.key k, coalesce(co.state,'') state, g.verdict as gverdict, g.gleif_cin, g.gleif_entity_status,
+                                 g.lei_status, g.lei_next_renewal from gleif_verdict g join co on co.id = g.id""").df().drop_duplicates(["k", "state"])
+        c.close()
+        co = co.merge(gv, on=["k", "state"], how="left")
+        ch = co.gverdict.eq("cin_changed"); co.loc[ch, "cin"] = co.loc[ch, "gleif_cin"]                  # same company, CIN updated
+        nw = co.gverdict.eq("new") & co.cin.isna()                                                     # found only in the LEI register
+        co.loc[nw, "cin"] = co.loc[nw, "gleif_cin"]
+        co.loc[nw, "mca_status"] = co.loc[nw, "gleif_entity_status"].map(lambda x: "Active" if x == "ACTIVE" else "Dissolved or inactive (LEI)")
+        co.loc[nw, "id_source"] = "lei-register"
+        co["identity"] = co.gverdict.map({"confirmed": "confirmed by LEI register", "cin_changed": "confirmed (CIN updated)",
+                                          "conflict": "CONFLICT: LEI register holds this name under another company",
+                                          "new": "identified via LEI register"}).fillna(co.id_source.map(lambda x: "name match, not checkable (no LEI)" if isinstance(x, str) else ""))
     except Exception as e:
-        print("note: iem_verify.duckdb unavailable:", str(e)[:60])
+        print("note: iem_verify.duckdb or gleif_verdict unavailable:", str(e)[:70])
     reg = BASE / "IEM_registry_matches.csv"
     if reg.exists() and len(co):
         r = pd.read_csv(reg); r["state"] = r.state.fillna(""); r = r[r.verdict == "MATCHED"][["k", "state", "cin", "status"]]
@@ -93,13 +105,15 @@ def main():
         m = co.cin.isna() & co.c3.notna(); co.loc[m, "cin"] = co.loc[m, "c3"]; co.loc[m, "mca_status"] = co.loc[m, "s3"]; co.loc[m, "id_source"] = "registry"
         co = co.drop(columns=["c3", "s3"])
     if len(co):
-        a = a.merge(co[["k", "state", "cin", "mca_status", "id_source", "usable"]].drop_duplicates(["k", "state"]), on=["k", "state"], how="left")
+        keep = [c_ for c_ in ["k", "state", "cin", "mca_status", "id_source", "usable", "identity", "lei_status", "lei_next_renewal"] if c_ in co.columns]
+        a = a.merge(co[keep].drop_duplicates(["k", "state"]), on=["k", "state"], how="left")
     else:
         a = a.assign(cin=None, mca_status=None, id_source=None, usable=True)
     a["usable"] = a.usable.fillna(True).astype(bool)
     inactive = a.mca_status.fillna("").str.lower().str.contains("strike|amalgam|liquidat|dissol|closed|cirp")
     a["support_candidate"] = (~a.has_b) & a.usable & ~inactive & (a.month >= "2021-01")
-    a["verified_active"] = a.mca_status.fillna("").str.lower().eq("active")
+    a["identity"] = a["identity"] if "identity" in a else ""
+    a["verified_active"] = a.mca_status.fillna("").str.lower().eq("active") & ~a.identity.fillna("").str.startswith("CONFLICT")
 
     # --- per-company roll-up
     comp = (a.groupby(["k", "state"]).agg(name=("company_name", "last"), filings=("month", "size"), first_month=("month", "min"),
@@ -120,7 +134,9 @@ def main():
     # --- outputs
     cand = a[a.support_candidate].copy()
     cand["filing_age_yrs"] = (2026.75 - (cand.month.str[:4].astype(float) + (cand.month.str[5:7].astype(float) - 1) / 12)).round(1)
-    cols = ["company_name", "state", "month", "a_no", "a_date", "item", "link", "cin", "mca_status", "verified_active", "filing_age_yrs"]
+    cols = ["company_name", "state", "month", "a_no", "a_date", "item", "link", "cin", "mca_status", "verified_active", "identity",
+            "lei_status", "lei_next_renewal", "filing_age_yrs"]
+    cols = [c_ for c_ in cols if c_ in cand.columns]
     cand = cand.sort_values(["verified_active", "month"], ascending=[False, False])
     summ = a.groupby("year").agg(part_a_filings=("k", "size"), linked_number_date=("link", lambda s: (s == "number+date").sum()),
                                  linked_name_only=("link", lambda s: (s == "name").sum()), no_part_b_found=("has_b", lambda s: (~s).sum())).reset_index()
@@ -129,13 +145,13 @@ def main():
         "One row per Part A filing. 'link' = how a Part B was tied to it: number+date (strong), name (weaker), none.",
         "Candidates = filing from 2021 onward, usable name, no Part B found, not known to be struck off/amalgamated/in insolvency.",
         "'none' is absence of evidence: about 40% of Part B records cannot be tied to Part A by number, so some candidates did implement. Verify before use.",
-        "CIN/status only exists for companies the web/registry lookups reached. 'verified_active' is as reported by the lookup site on the run date.",
+        "Identity column: 'confirmed by LEI register' = the company's CIN matches the global LEI register; 'CONFLICT' = that register holds the same name under a different company (do not rely); 'name match, not checkable' = no LEI, so unverified; ~6% (name+state) and ~16% (name-only) of checkable matches were a different company. CIN/status only exists for companies the lookups reached. 'verified_active' is as reported by the lookup site on the run date.",
         "The data.gov.in registry data stops at 3 Nov 2023 and its API was unreachable from this machine.",
         "Coverage: Part A 2024 only to August; 2020-04/06/12 and 2021-03..06 absent; 2023 cumulative files not parsed. Part B: 283 of 341 files yielded records."]})
     out = BASE / "IEM_A_vs_B_support_candidates.xlsx"
     with pd.ExcelWriter(out, engine="openpyxl") as w:
         cand[cols].to_excel(w, sheet_name="Candidates", index=False)
-        a[["company_name", "state", "month", "a_no", "a_date", "item", "link", "b_month", "b_commenced", "cin", "mca_status", "support_candidate"]
+        a[["company_name", "state", "month", "a_no", "a_date", "item", "link", "b_month", "b_commenced", "cin", "mca_status", "identity", "support_candidate"]
           ].sort_values("month", ascending=False).to_excel(w, sheet_name="Part A filings", index=False)
         allc[["name", "state", "in_part_a", "in_part_b", "filings", "n_part_b", "first_month", "last_month", "last_part_b", "filings_with_b",
               "open_filings", "cin", "mca_status"]].to_excel(w, sheet_name="Companies matched", index=False)

@@ -28,8 +28,8 @@ The IEM state is the **plant** state; the CIN state is the **registered-office**
 2. **Tier 2:** exact-name page with a different state, accepted only if the company type in the CIN (private or public) agrees with the name.
 3. A match is rejected if the CIN shows incorporation after the filing year.
 
-Validation against GLEIF on a 300-company sample (152 hold an LEI): about 12% of tier 1 and 24% of tier 2 matches pointed to a
-different company with the same name. Treat a single identification as a lead, not a fact. Status from free company sites is not
+Validation against the complete GLEIF India register (12,668 matched companies hold an LEI): about 6% of tier 1 and 16% of tier 2
+matches pointed to a different company with the same name. Treat a single identification as a lead, not a fact. Status from free company sites is not
 an official certificate, and the data.gov.in master is labelled "data up to 3 November 2023".
 
 ## Running it
@@ -50,8 +50,8 @@ git-ignored on purpose: the PDFs are re-fetchable, and the company tables contai
 ## Status (10 October 2026)
 
 - Part A: 21,954 records (coordinate parser) + 72,322 (text layout); Part B: 19,913 records, 12,708 distinct names.
-- Companies identified: 23,017 of 38,586 usable names (18,473 distinct CINs).
-- Full GLEIF India register (401,638 LEI records) being joined for independent confirmation.
+- Companies identified by web lookups: 23,017 of 38,586 usable names (18,473 distinct CINs).
+- Complete GLEIF India register (401,638 LEI records) joined: 94% of name+state and 84% of name-only matches confirmed on the 55% of companies that hold an LEI; 2,056 further companies identified from the register.
 - Known gaps: Part A 2024 only to August; 2020-04/06/12 and 2021-03 to 06 lists absent locally; 2023 cumulative files not parsed.
 
 See `IEM_VERIFY_METHOD.md` for the full method, source reachability tests and findings.
