@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""iem - one command for the IEM Part A/B company verification pipeline.
+
+  iem status                       what exists, row counts, how far each stage got
+  iem parse [coords|text|all]      Part A PDFs -> parquet (coordinate parser / text-layout + OCR fallback)
+  iem build                        extract distinct companies + Part B evidence (extract, partb)
+  iem master FILE.csv              load an MCA company-master CSV (from ogd_fetch_master.py or data.gov.in)
+  iem ogd [--states a,b]           download the MCA master via the data.gov.in API (needs OGD_KEY)
+  iem match                        match companies to the loaded master (exact, then fuzzy)
+  iem web [N]                      web-slug lookup for the N most-filed companies (default 500)
+  iem registry [--since Y --limit N]   exact-name lookup against the data.gov.in API (needs OGD_KEY)
+  iem batches [SIZE]               write leftover companies as agent batches (default 40)
+  iem ingest                       read agent verdicts from llm_results/*.jsonl
+  iem report                       verdicts + IEM_operational_status.xlsx
+  iem all                          parse -> build -> match -> web 500 -> report (skips steps with missing inputs)
+
+Run from anywhere; it always works in the IEM folder. Secrets: export OGD_KEY=... (env only).
+"""
+import os, subprocess, sys
+from pathlib import Path
+
+HERE = Path(os.path.realpath(__file__)).parent
+os.chdir(HERE)
+PY = sys.executable
+
+
+def run(*args):
+    print("$", " ".join(["python3", *map(str, args)]), flush=True)
+    r = subprocess.run([PY, *map(str, args)])
+    if r.returncode: sys.exit(r.returncode)
+
+
+def status():
+    import glob
+    def n(p): return len(glob.glob(p))
+    print(f"folder        {HERE}")
+    print(f"Part A / B    {n('PartA/*.pdf')} / {n('PartB/*.pdf')} PDFs")
+    try:
+        import pandas as pd
+        for f in ("partA_coords.parquet", "partA_text_layout.parquet"):
+            print(f"{f:<26}", f"{len(pd.read_parquet(f)):>7} records" if Path(f).exists() else "missing  (iem parse)")
+    except Exception as e:
+        print("pandas problem:", e)
+    try:
+        import duckdb
+        c = duckdb.connect("iem_verify.duckdb", read_only=True)
+        q = lambda s: c.execute(s).fetchone()[0]
+        print(f"companies     {q('select count(*) from co')} distinct; {q('select count(*) from co where usable')} usable; "
+              f"{q('select count(*) from co where part_b_hit')} with Part B evidence")
+        print(f"mapped (CIN)  {q('select count(*) from co where cin is not null')}   "
+              f"parked candidates {q('select count(*) from co where cand is not null and cin is null')}")
+        try: print(f"master loaded {q('select count(*) from mca_master')} rows")
+        except Exception: print("master loaded none      (iem ogd / iem master FILE)")
+    except Exception as e:
+        print("iem_verify.duckdb:", "busy (a job is running)" if "lock" in str(e).lower() else "missing  (iem build)")
+    print("OGD_KEY       ", "set" if os.environ.get("OGD_KEY") else "not set")
+    print("llm batches   ", n("llm_batches/*.jsonl"), "| agent results", n("llm_results/*.jsonl"))
+
+
+def main(a):
+    if not a or a[0] in ("-h", "--help", "help"): print(__doc__); return
+    c, rest = a[0], a[1:]
+    if c == "status": status()
+    elif c == "parse":
+        w = rest[0] if rest else "all"
+        if w in ("coords", "all"): run("parse_partA_coords.py")
+        if w in ("text", "all"): run("extract_partA_text_layout.py")
+    elif c == "build": run("iem_verify.py", "extract"); run("iem_verify.py", "partb")
+    elif c == "master":
+        if not rest: sys.exit("usage: iem master FILE.csv")
+        run("iem_verify.py", "master", "--master", rest[0])
+    elif c == "ogd": run("ogd_fetch_master.py", *rest)
+    elif c == "match": run("iem_verify.py", "match", *rest)
+    elif c == "web": run("iem_verify.py", "web", "--limit", rest[0] if rest else "500")
+    elif c == "registry": run("registry_match.py", *rest)
+    elif c == "batches": run("iem_verify.py", "batches", "--size", rest[0] if rest else "40")
+    elif c == "ingest": run("iem_verify.py", "ingest")
+    elif c == "report": run("iem_verify.py", "report")
+    elif c == "all":
+        run("parse_partA_coords.py"); run("extract_partA_text_layout.py")
+        run("iem_verify.py", "extract"); run("iem_verify.py", "partb")
+        try:
+            import duckdb
+            has = duckdb.connect("iem_verify.duckdb", read_only=True).execute(
+                "select count(*) from information_schema.tables where table_name='mca_master'").fetchone()[0]
+        except Exception:
+            has = 0
+        if has: run("iem_verify.py", "match")
+        else: print("- skipping match: no master loaded (iem ogd, then iem master FILE)")
+        run("iem_verify.py", "web", "--limit", "500"); run("iem_verify.py", "report")
+    else: sys.exit(f"unknown command {c!r}; try: iem help")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

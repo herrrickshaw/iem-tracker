@@ -1,0 +1,24 @@
+# Data and downloads stay local: the DPIIT PDFs are re-fetchable, and the company tables hold details scraped from
+# third-party sites (QuickCompany, Tofler, GLEIF) that should not be republished.
+PartA/
+PartB/
+md/
+llm_batches/
+llm_results/
+*.pdf
+*.parquet
+*.duckdb
+*.duckdb.wal
+*.xlsx
+*.csv
+*.pkl
+*.jsonl
+*.cursor
+*.log
+*.orig
+*.html
+__pycache__/
+.DS_Store
+# secrets: keys are read from environment variables only
+.env
+*.key

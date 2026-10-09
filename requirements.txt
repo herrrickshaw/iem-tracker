@@ -1,0 +1,9 @@
+pandas
+pyarrow
+duckdb
+openpyxl
+pymupdf
+rapidfuzz
+requests
+python-dateutil
+curl_cffi   # optional: only used to test TLS fingerprinting against api.data.gov.in
