@@ -62,6 +62,10 @@ def stats(db):
     return m
 
 
+LBL = {"Amalgamated": "amalgamated into another company", "Strike Off": "struck off", "Under CIRP": "in insolvency", "Converted to LLP": "converted to an LLP",
+       "Under Liquidation": "in liquidation"}
+
+
 def fmt(n): return f"{int(n):,}"
 
 
@@ -84,6 +88,15 @@ def build_section(m):
     n, idn, act, ina = len(nb), int(nb.ident.sum()), int(nb.active.sum()), int(nb.inactive.sum())
     r_id = int(rb.ident.sum()); r_act = int(rb.active.sum())
     tier2 = int((nb.src == "web-slug-name-only").sum()); tier1 = int((nb.src == "web-slug+state").sum())
+    ap = pd.read_csv(Path(__file__).resolve().parent / "apify_mca.csv", dtype=str).drop_duplicates("cin")
+    ap["agm"] = pd.to_datetime(ap.dateOfLastAGM, format="%m/%d/%Y", errors="coerce"); ap["bs"] = pd.to_datetime(ap.balanceSheetDate, format="%m/%d/%Y", errors="coerce")
+    lv = nb[nb.year.between(2021, 2024) & nb.ident].merge(ap[["cin", "status", "agm", "bs"]].rename(columns={"status": "live"}), on="cin", how="left")
+    lv["has"] = lv.live.notna(); lv["act"] = lv.live.eq("Active"); lv["strong"] = lv.act & (lv.agm >= "2025-01-01") & (lv.bs >= "2025-03-31"); lv["notact"] = lv.has & ~lv.act
+    lrows = "".join(f"<tr><td>{int(y)}</td><td>{fmt(len(g))}</td><td>{fmt(g.has.sum())}</td><td>{fmt(g.act.sum())}</td><td>{fmt(g.strong.sum())}</td><td>{fmt(g.notact.sum())}</td></tr>" for y, g in lv.groupby("year"))
+    ltot = f"<tr><td><b>2021&ndash;2024</b></td><td><b>{fmt(len(lv))}</b></td><td><b>{fmt(lv.has.sum())}</b></td><td><b>{fmt(lv.act.sum())}</b></td><td><b>{fmt(lv.strong.sum())}</b></td><td><b>{fmt(lv.notact.sum())}</b></td></tr>"
+    ltable = ('<div class="gb-tblwrap"><table class="gb-table"><thead><tr><th>Filed</th><th>Identified</th><th>Current record</th><th>Active</th><th>Active and filing</th><th>Not Active</th></tr></thead><tbody>' + lrows + ltot + "</tbody></table></div>")
+    nact = lv[lv.notact].live.value_counts(); n_h, n_a, n_s = int(lv.has.sum()), int(lv.act.sum()), int(lv.strong.sum()); n_n = int(lv.notact.sum())
+    mirror_lag = int((lv.notact & lv.status.fillna("").str.lower().eq("active")).sum())
     other = idn - act - ina; s_dropped = int(nb.dropped.sum()); s_conf = int(nb.dropped_conflict.sum())
     n_lei = int((nb.src == "lei-register").sum()); r1, r2, cov, nweb = m.attrs["rate1"], m.attrs["rate2"], m.attrs["covered"], m.attrs["nweb"]
     html = f"""
@@ -95,6 +108,10 @@ def build_section(m):
 <p>The check separates the filings that can be set aside from those that cannot. A filing whose company has been struck off or merged away is unlikely to become a plant under that filing. A filing whose company is Active may or may not have been built: among 2017&ndash;2024 filings that did reach Part B and could be identified, {pct(r_act, r_id)} of companies are also Active, so being Active says little about whether a given plant exists. An earlier web check of 40 filings from 2017&ndash;2021 with no Part B found a plant or product line operating at the filed location for 19 of them, an announced or half-built project for 4, and an active company with nothing found on the project for 9.</p>
 <p>Three sources of identification were used. {fmt(tier1)} of the identified filings matched on legal name and on a registered office in the same state as the plant. {fmt(tier2)} matched on legal name alone, because the registered office is in a different state from the plant, which is common for companies with plants in several states; these were accepted only where the company type in the CIN (private or public) agrees with the name. {fmt(n_lei)} came from the global Legal Entity Identifier (LEI) register, which records each holder&rsquo;s CIN. Matches were dropped where the company was registered after the filing year ({fmt(s_dropped)} filings).</p>
 <p>Every name-based match was then checked against the complete LEI register for India, about 170,000 companies that carry an MCA number. {fmt(cov)} of the {fmt(nweb)} matched company records (one per company and plant state) hold an LEI and could be checked: {100*(1-r1):.0f}% of the name-and-state matches and {100*(1-r2):.0f}% of the name-only matches are the same company, and the rest point to a different company with the same name. {fmt(s_conf)} such filings were removed from the counts. Companies without an LEI, mostly smaller firms, cannot be checked this way and may carry a similar error, so treat any single company identification as a lead to confirm, not a fact. Status is as shown on the registry pages on {UPDATED}, not a certificate from the Ministry; the Ministry&rsquo;s own open dataset on data.gov.in is labelled &ldquo;data up to 3 November 2023&rdquo; and so cannot show what has happened since.</p>
+<p><b>Current Ministry record, filings from 2021.</b> For the {fmt(len(lv))} identified filings from 2021 to 2024 with no Part B, each company&rsquo;s current record on the Ministry&rsquo;s register (status, date of last AGM, date of last balance sheet) was retrieved through a data service that reads the Ministry&rsquo;s company master data. A record came back for {fmt(n_h)} of them ({pct(n_h, len(lv))}), more often for recent filings because those were fetched first; the rest were not retrieved and are not counted as negatives.</p>
+{ltable}
+<p class="gb-note">Current record: a record was retrieved. Active and filing: status Active, an AGM held in 2025 or later and a balance sheet for FY2024-25 or later. Not Active: {", ".join(f"{int(v)} {LBL.get(k, k.lower())}" for k, v in nact.items())}.</p>
+<p>Of the {fmt(n_h)} records, {fmt(n_a)} ({pct(n_a, n_h)}) are Active and {fmt(n_s)} ({pct(n_s, n_h)}) are Active and still filing, which shows the company is still filing its accounts with the Ministry. It does not show the plant was built. {fmt(n_n)} are not Active, and {'all of them' if mirror_lag == n_n else fmt(mirror_lag) + ' of them'} had appeared as Active on the free company pages used above, so those pages lag the Ministry on recent mergers and strike-offs; the status shares in the first table should be read with that lag in mind.</p>
 """
     return html, dict(n=n, idn=idn, act=act, ina=ina, tier1=tier1, tier2=tier2, r_id=r_id, r_act=r_act)
 
@@ -115,7 +132,7 @@ def main():
 
     note = (f'<div class="gb-card"><p class="gb-note" style="margin:0"><b>Update, {UPDATED}.</b> Added a section on the companies behind '
             f'Part A filings that have no Part B: how many could be identified in the company register and how many are still Active. '
-            f'The register itself and the counts in the sections above are unchanged. <b>Correction, {CORRECTED}:</b> the first version of the new section did not drop company matches whose registration date falls after the filing, and did not check the name-based matches against the global LEI register. Both are now done, the LEI register adds companies the first pass missed, and the figures in the section were recalculated.</p></div>')
+            f'The register itself and the counts in the sections above are unchanged. <b>Correction, {CORRECTED}:</b> the first version of the new section did not drop company matches whose registration date falls after the filing, and did not check the name-based matches against the global LEI register. Both are now done, the LEI register adds companies the first pass missed, and the figures in the section were recalculated. <b>Update, {CORRECTED}:</b> the section now also shows the Ministry&rsquo;s current record for filings from 2021.</p></div>')
     h = h.replace('</div>\n\n<h2 class="gb-h2">What an IEM is, and who files one</h2>', '</div>\n\n' + note + '\n\n<h2 class="gb-h2">What an IEM is, and who files one</h2>', 1)
     assert note in h, "update note not inserted"
     h = h.replace('Industrial Policy &middot; Data &middot; 7 October 2026', f'Industrial Policy &middot; Data &middot; 7 October 2026, updated {UPDATED}', 1)
@@ -128,7 +145,7 @@ def main():
     anchor = '\n\n<h2 class="gb-h2">Sources and caveats</h2>'
     assert anchor in h; h = h.replace(anchor, "\n" + meth + anchor, 1)
     src = (' Company status and CIN (added ' + UPDATED + '): public company pages on QuickCompany, which republish Ministry of Corporate Affairs company master data, read 7&ndash;9 October 2026; '
-           'the Ministry&rsquo;s open Company Master Data on data.gov.in (data up to 3 November 2023) was used as a reference for the format. A company listed Active may not have built the plant, and one not found may exist under another name.')
+           'the Ministry&rsquo;s open Company Master Data on data.gov.in (data up to 3 November 2023) was used as a reference for the format. Current company records for filings from 2021 (status, last AGM, last balance sheet): retrieved 10 October 2026 through the Apify actor factden/mca-company-director-scraper, which reads the Ministry&rsquo;s company master data; it returned between a fifth and a half of the CINs requested per pass, depending on batch size, so coverage is partial. Company identity was also checked against the GLEIF Legal Entity Identifier register, pulled 10 October 2026. A company listed Active may not have built the plant, and one not found may exist under another name.')
     h = h.replace(' A filing with no Part B found may still have been built.</p>\n</div>', ' A filing with no Part B found may still have been built.' + src + '</p>\n</div>', 1)
     assert 'QuickCompany' in h, "sources not extended"
     # balance checks
