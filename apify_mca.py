@@ -58,7 +58,7 @@ def main():
         got_pass = 0
         for i in range(0, len(todo), a.batch):
             used = spend(token) - start
-            if used + 0.40 > a.budget:
+            if used + 0.10 > a.budget:
                 print(f"stopping: spent ${used:.3f} of ${a.budget}"); fh.close(); return
             status, cost, items = run_batch(token, todo[i:i + a.batch])
             for it in items: w.writerow(it); done.add(it["cin"])

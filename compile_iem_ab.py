@@ -109,6 +109,21 @@ def main():
         a = a.merge(co[keep].drop_duplicates(["k", "state"]), on=["k", "state"], how="left")
     else:
         a = a.assign(cin=None, mca_status=None, id_source=None, usable=True)
+    # current MCA record (Apify actor, by CIN): live status, last AGM and balance sheet, compliance flags
+    ap = BASE / "apify_mca.csv"
+    if ap.exists():
+        m = pd.read_csv(ap, dtype=str).drop_duplicates("cin")
+        m["mca_live_status"] = m.status; m["last_agm"] = pd.to_datetime(m.dateOfLastAGM, format="%m/%d/%Y", errors="coerce")
+        m["last_balance_sheet"] = pd.to_datetime(m.balanceSheetDate, format="%m/%d/%Y", errors="coerce")
+        m["mca_defaulter"] = (m.annualReturnDefaulter.astype(str).eq("True") | m.balanceSheetDefaulter.astype(str).eq("True") | m.underCIRP.astype(str).eq("True"))
+        a = a.merge(m[["cin", "mca_live_status", "last_agm", "last_balance_sheet", "mca_defaulter"]], on="cin", how="left")
+        a["mca_defaulter"] = a.mca_defaulter.fillna(False).astype(bool)
+        a["operating_evidence"] = "no live MCA record yet"
+        has = a.mca_live_status.notna()
+        a.loc[has, "operating_evidence"] = "MCA record: Active, AGM 2025+ and balance sheet FY2024-25+"
+        weak = has & ~((a.mca_live_status == "Active") & (a.last_agm >= "2025-01-01") & (a.last_balance_sheet >= "2025-03-31") & ~a.mca_defaulter)
+        a.loc[weak, "operating_evidence"] = "MCA record: Active but filings lag, or flagged"
+        a.loc[has & (a.mca_live_status != "Active"), "operating_evidence"] = "MCA record: not Active"
     a["usable"] = a.usable.fillna(True).astype(bool)
     inactive = a.mca_status.fillna("").str.lower().str.contains("strike|amalgam|liquidat|dissol|closed|cirp")
     a["support_candidate"] = (~a.has_b) & a.usable & ~inactive & (a.month >= "2021-01")
@@ -135,7 +150,7 @@ def main():
     cand = a[a.support_candidate].copy()
     cand["filing_age_yrs"] = (2026.75 - (cand.month.str[:4].astype(float) + (cand.month.str[5:7].astype(float) - 1) / 12)).round(1)
     cols = ["company_name", "state", "month", "a_no", "a_date", "item", "link", "cin", "mca_status", "verified_active", "identity",
-            "lei_status", "lei_next_renewal", "filing_age_yrs"]
+            "lei_status", "lei_next_renewal", "operating_evidence", "last_agm", "last_balance_sheet", "filing_age_yrs"]
     cols = [c_ for c_ in cols if c_ in cand.columns]
     cand = cand.sort_values(["verified_active", "month"], ascending=[False, False])
     summ = a.groupby("year").agg(part_a_filings=("k", "size"), linked_number_date=("link", lambda s: (s == "number+date").sum()),
