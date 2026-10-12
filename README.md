@@ -1,5 +1,9 @@
 # IEM Tracker
 
+<!-- how-to-use-with-ai -->
+> **New here?** See [How to use this repo with AI (Claude, Gemini, ChatGPT)](HOW_TO_USE_WITH_AI.md) — clone it, paste it into an AI tool, and ask in plain English.
+
+
 Tracks India's Industrial Entrepreneur Memoranda (IEM). It reads DPIIT's monthly Part A (intention to build) and Part B
 (production started) company lists, links the two, and identifies each company in the company register (CIN and status),
 so that filings which never reached Part B can be separated into companies that no longer exist and companies that are still active.
