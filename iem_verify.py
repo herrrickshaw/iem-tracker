@@ -33,7 +33,9 @@ CIN_STATE = {"AP": "ANDHRA PRADESH", "TG": "TELANGANA", "AS": "ASSAM", "BR": "BI
              "GA": "GOA", "GJ": "GUJARAT", "HR": "HARYANA", "HP": "HIMACHAL PRADESH", "JH": "JHARKHAND",
              "KA": "KARNATAKA", "KL": "KERALA", "MP": "MADHYA PRADESH", "MH": "MAHARASHTRA", "OR": "ODISHA",
              "PB": "PUNJAB", "RJ": "RAJASTHAN", "TN": "TAMIL NADU", "UP": "UTTAR PRADESH", "UR": "UTTARAKHAND",
-             "WB": "WEST BENGAL", "DL": "DELHI", "JK": "JAMMU", "CH": "CHANDIGARH", "PY": "PUDUCHERRY"}
+             "WB": "WEST BENGAL", "DL": "DELHI", "JK": "JAMMU", "CH": "CHANDIGARH", "PY": "PUDUCHERRY",
+             "AR": "ARUNACHAL PRADESH", "ML": "MEGHALAYA", "MN": "MANIPUR", "MZ": "MIZORAM", "NL": "NAGALAND",
+             "SK": "SIKKIM", "TR": "TRIPURA"}
 SUFFIX = re.compile(r"\b(PRIVATE LIMITED|PVT\.? ?LTD\.?|LIMITED|LTD\.?|LLP|PVT)\b")
 STOP = re.compile(r"\b(PRIVATE|PVT|LIMITED|LTD|LLP|CO|COMPANY|THE|AND|INDIA|INDUSTRIES)\b")
 
@@ -71,7 +73,7 @@ def find_state(text):
     t = str(text).upper()
     for s in STATES:
         if s in t:
-            return "ORISSA" if s == "ODISHA" else s if s != "ORISSA" else "ODISHA"
+            return "ODISHA" if s == "ORISSA" else s     # one spelling, the one CIN_STATE/GLEIF use
     return None
 
 
