@@ -101,7 +101,8 @@ def main():
             g = lookup(sess, cache, r.name)
             if g["found"] == "1":
                 st = None if pd.isna(r.state) else r.state
-                same_state = st is not None and REGION.get(g["region"]) == st or CIN_STATE.get(g["cin"][6:8]) == st
+                # parenthesised: without them `a and b or c` let an unknown plant state "agree" with an unmapped CIN code
+                same_state = st is not None and (REGION.get(g["region"]) == st or CIN_STATE.get((g["cin"] or "")[6:8]) == st)
                 out.append(dict(id=r.id, name=r.name, state=st, in_part_b=r.in_part_b, cin=g["cin"], gleif_status=g["status"],
                                 lei_status=g["lei_status"], gleif_name=g["legal_name"], state_agrees=bool(same_state)))
             if i % 50 == 0: print(f"  {i}/{len(df)}  found {len(out)}", flush=True)
