@@ -265,15 +265,20 @@ def stage_web(a):
         return cid, state, None, None, out
 
     got = parked = tier2 = 0; names = {t[0]: t[1] for t in todo}; t0 = time.time()
+    last_year = {i: max([int(x[:4]) for x in (li, lb) if isinstance(x, str) and x[:4].isdigit()] or [3000])
+                 for i, li, lb in k.execute("select id, last_iem, last_part_b from co").fetchall()}
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
         futs = [ex.submit(work, it) for it in todo]
         for i, f in enumerate(as_completed(futs), 1):
             cid, state, cin, st, fetched = f.result()
             for row in fetched: k.execute("insert or replace into web_cache values(?,?,?,?,?)", list(row))
+            if cin and cin[8:12].isdigit() and int(cin[8:12]) > last_year.get(cid, 3000):
+                cin = None      # incorporated after the company's last Part A / Part B filing: a later homonym, not the filer
             if cin:
                 nm = names[cid]
-                want = "PTC" if re.search(r"\b(PVT|PRIVATE)\b|\(P\)", nm.upper()) else "PLC"
-                class_ok = cin[12:15] in (want, "NPL", "GAP", "GOI", "FTC", "FLC", "PTC" if want == "PTC" else "PLC")
+                private = bool(re.search(r"\b(PVT|PRIVATE)\b|\(P\)", nm.upper()))
+                # CIN class must agree with the name's private/public form; NPL and GOI exist in both forms
+                class_ok = cin[12:15] in ({"PTC", "FTC"} if private else {"PLC", "FLC", "GAP"}) | {"NPL", "GOI"}
                 if state and CIN_STATE.get(cin[6:8]) == state:
                     k.execute("update co set cin=?,status=?,src='web-slug+state',score=90 where id=?", [cin, st, cid]); got += 1
                 elif state and class_ok:
@@ -314,7 +319,7 @@ def stage_ingest(a):
 def classify(status, hit, cin):
     if not cin: return "UNMAPPED"
     s = (status or "").lower()
-    if any(x in s for x in ("strike", "amalgam", "liquidat", "dissolv", "closed", "inactive")): return "INACTIVE"
+    if any(x in s for x in ("strike", "striking", "amalgam", "liquidat", "dissolv", "closed", "inactive")): return "INACTIVE"
     if "dormant" in s: return "DORMANT"
     if "active" in s or s == "":
         return "OPERATIONAL (active + Part B)" if hit else "ACTIVE (registered, no Part B yet)"
