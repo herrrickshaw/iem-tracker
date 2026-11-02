@@ -1,0 +1,556 @@
+{
+ "classify": [
+  [
+   null,
+   true,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   null,
+   true,
+   "U1",
+   "OPERATIONAL (active + Part B)"
+  ],
+  [
+   null,
+   false,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   null,
+   false,
+   "U1",
+   "ACTIVE (registered, no Part B yet)"
+  ],
+  [
+   "Active",
+   true,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   "Active",
+   true,
+   "U1",
+   "OPERATIONAL (active + Part B)"
+  ],
+  [
+   "Active",
+   false,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   "Active",
+   false,
+   "U1",
+   "ACTIVE (registered, no Part B yet)"
+  ],
+  [
+   "Strike Off",
+   true,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   "Strike Off",
+   true,
+   "U1",
+   "INACTIVE"
+  ],
+  [
+   "Strike Off",
+   false,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   "Strike Off",
+   false,
+   "U1",
+   "INACTIVE"
+  ],
+  [
+   "Dormant under 455",
+   true,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   "Dormant under 455",
+   true,
+   "U1",
+   "DORMANT"
+  ],
+  [
+   "Dormant under 455",
+   false,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   "Dormant under 455",
+   false,
+   "U1",
+   "DORMANT"
+  ],
+  [
+   "Weird",
+   true,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   "Weird",
+   true,
+   "U1",
+   "CHECK"
+  ],
+  [
+   "Weird",
+   false,
+   null,
+   "UNMAPPED"
+  ],
+  [
+   "Weird",
+   false,
+   "U1",
+   "CHECK"
+  ]
+ ],
+ "find_state": {
+  "Cuttack, ODISHA": "ORISSA",
+  "DELHI NCR": "DELHI",
+  "Old ORISSA": "ODISHA",
+  "Plot 5, Sanand, GUJARAT": "GUJARAT",
+  "Pune, Maharashtra": "MAHARASHTRA",
+  "nowhere": null
+ },
+ "key": {
+  "A & B Co. Pvt Ltd": "A B",
+  "ABC (P) LTD": "ABC P",
+  "Foods Private Limited": "FOODS",
+  "Reliance Industries Limited": "RELIANCE",
+  "SOLAR PROJECTS LIMITED": "SOLAR PROJECTS",
+  "Sun Pharma Limited, Mumbai": "SUN PHARMA MUMBAI",
+  "THE Bharat Ltd": "BHARAT",
+  "Tata Steel Ltd.": "TATA STEEL",
+  "XYZ PVT.LTD": "XYZ",
+  "Xy": "XY"
+ },
+ "mca_variants": {
+  "A & B Co. Pvt Ltd": [
+   "A & B CO PRIVATE LIMITED",
+   "A AND B CO PRIVATE LIMITED"
+  ],
+  "ABC (P) LTD": [
+   "ABC PRIVATE LIMITED"
+  ],
+  "Foods Private Limited": [
+   "FOODS PRIVATE LIMITED"
+  ],
+  "Reliance Industries Limited": [
+   "RELIANCE INDUSTRIES LIMITED"
+  ],
+  "SOLAR PROJECTS LIMITED": [
+   "SOLAR PROJECTS LIMITED"
+  ],
+  "Sun Pharma Limited, Mumbai": [
+   "SUN PHARMA LIMITED MUMBAI"
+  ],
+  "THE Bharat Ltd": [
+   "THE BHARAT LIMITED",
+   "BHARAT LIMITED"
+  ],
+  "Tata Steel Ltd.": [
+   "TATA STEEL LIMITED"
+  ],
+  "XYZ PVT.LTD": [
+   "XYZ PRIVATE LIMITED"
+  ],
+  "Xy": [
+   "XY"
+  ]
+ },
+ "slug_variants": {
+  "A & B Co. Pvt Ltd": [
+   "a-b-co-private-limited",
+   "a-b-co-limited",
+   "a-b-co-private-limited"
+  ],
+  "ABC (P) LTD": [
+   "abc-p-limited",
+   "abc-p-limited",
+   "abc-p-private-limited"
+  ],
+  "Foods Private Limited": [
+   "foods-private-limited",
+   "foods-limited",
+   "foods-private-limited"
+  ],
+  "Reliance Industries Limited": [
+   "reliance-industries-limited",
+   "reliance-industries-limited",
+   "reliance-industries-private-limited"
+  ],
+  "SOLAR PROJECTS LIMITED": [
+   "solar-projects-limited",
+   "solar-projects-limited",
+   "solar-projects-private-limited"
+  ],
+  "Sun Pharma Limited, Mumbai": [
+   "sun-pharma--mumbai-limited",
+   "sun-pharma--mumbai-limited",
+   "sun-pharma--mumbai-private-limited"
+  ],
+  "THE Bharat Ltd": [
+   "the-bharat-limited",
+   "the-bharat-limited",
+   "the-bharat-private-limited"
+  ],
+  "Tata Steel Ltd.": [
+   "tata-steel-limited",
+   "tata-steel-limited",
+   "tata-steel-private-limited"
+  ],
+  "XYZ PVT.LTD": [
+   "xyz-private-limited",
+   "xyz-limited",
+   "xyz-private-limited"
+  ],
+  "Xy": [
+   "xy-limited",
+   "xy-limited",
+   "xy-private-limited"
+  ]
+ },
+ "split_name": {
+  "A & B Co. Pvt Ltd": [
+   "A & B CO. PVT LTD",
+   true
+  ],
+  "ABC (P) LTD": [
+   "ABC (P) LTD",
+   true
+  ],
+  "Foods Private Limited": [
+   "FOODS PRIVATE LIMITED",
+   true
+  ],
+  "Reliance Industries Limited": [
+   "RELIANCE INDUSTRIES LIMITED",
+   true
+  ],
+  "SOLAR PROJECTS LIMITED": [
+   "SOLAR PROJECTS LIMITED",
+   true
+  ],
+  "Sun Pharma Limited, Mumbai": [
+   "SUN PHARMA LIMITED",
+   true
+  ],
+  "THE Bharat Ltd": [
+   "THE BHARAT LTD",
+   true
+  ],
+  "Tata Steel Ltd.": [
+   "TATA STEEL LTD",
+   true
+  ],
+  "XYZ PVT.LTD": [
+   "XYZ PVT.LTD",
+   true
+  ],
+  "Xy": [
+   "XY",
+   false
+  ]
+ },
+ "tier": [
+  [
+   "U12345MH2001PTC123456",
+   "ABC PVT LTD",
+   "MAHARASHTRA",
+   "tier1"
+  ],
+  [
+   "U12345MH2001PTC123456",
+   "ABC PVT LTD",
+   "GUJARAT",
+   "tier2"
+  ],
+  [
+   "U12345MH2001PTC123456",
+   "ABC PVT LTD",
+   "KARNATAKA",
+   "tier2"
+  ],
+  [
+   "U12345MH2001PTC123456",
+   "ABC PVT LTD",
+   null,
+   "parked"
+  ],
+  [
+   "U12345MH2001PTC123456",
+   "XYZ LIMITED",
+   "MAHARASHTRA",
+   "tier1"
+  ],
+  [
+   "U12345MH2001PTC123456",
+   "XYZ LIMITED",
+   "GUJARAT",
+   null
+  ],
+  [
+   "U12345MH2001PTC123456",
+   "XYZ LIMITED",
+   "KARNATAKA",
+   null
+  ],
+  [
+   "U12345MH2001PTC123456",
+   "XYZ LIMITED",
+   null,
+   "parked"
+  ],
+  [
+   "L12345GJ1995PLC123456",
+   "ABC PVT LTD",
+   "MAHARASHTRA",
+   null
+  ],
+  [
+   "L12345GJ1995PLC123456",
+   "ABC PVT LTD",
+   "GUJARAT",
+   "tier1"
+  ],
+  [
+   "L12345GJ1995PLC123456",
+   "ABC PVT LTD",
+   "KARNATAKA",
+   null
+  ],
+  [
+   "L12345GJ1995PLC123456",
+   "ABC PVT LTD",
+   null,
+   "parked"
+  ],
+  [
+   "L12345GJ1995PLC123456",
+   "XYZ LIMITED",
+   "MAHARASHTRA",
+   "tier2"
+  ],
+  [
+   "L12345GJ1995PLC123456",
+   "XYZ LIMITED",
+   "GUJARAT",
+   "tier1"
+  ],
+  [
+   "L12345GJ1995PLC123456",
+   "XYZ LIMITED",
+   "KARNATAKA",
+   "tier2"
+  ],
+  [
+   "L12345GJ1995PLC123456",
+   "XYZ LIMITED",
+   null,
+   "parked"
+  ],
+  [
+   "U12345DL2010FTC123456",
+   "ABC PVT LTD",
+   "MAHARASHTRA",
+   "tier2"
+  ],
+  [
+   "U12345DL2010FTC123456",
+   "ABC PVT LTD",
+   "GUJARAT",
+   "tier2"
+  ],
+  [
+   "U12345DL2010FTC123456",
+   "ABC PVT LTD",
+   "KARNATAKA",
+   "tier2"
+  ],
+  [
+   "U12345DL2010FTC123456",
+   "ABC PVT LTD",
+   null,
+   "parked"
+  ],
+  [
+   "U12345DL2010FTC123456",
+   "XYZ LIMITED",
+   "MAHARASHTRA",
+   "tier2"
+  ],
+  [
+   "U12345DL2010FTC123456",
+   "XYZ LIMITED",
+   "GUJARAT",
+   "tier2"
+  ],
+  [
+   "U12345DL2010FTC123456",
+   "XYZ LIMITED",
+   "KARNATAKA",
+   "tier2"
+  ],
+  [
+   "U12345DL2010FTC123456",
+   "XYZ LIMITED",
+   null,
+   "parked"
+  ],
+  [
+   "U12345KA2010NPL123456",
+   "ABC PVT LTD",
+   "MAHARASHTRA",
+   "tier2"
+  ],
+  [
+   "U12345KA2010NPL123456",
+   "ABC PVT LTD",
+   "GUJARAT",
+   "tier2"
+  ],
+  [
+   "U12345KA2010NPL123456",
+   "ABC PVT LTD",
+   "KARNATAKA",
+   "tier1"
+  ],
+  [
+   "U12345KA2010NPL123456",
+   "ABC PVT LTD",
+   null,
+   "parked"
+  ],
+  [
+   "U12345KA2010NPL123456",
+   "XYZ LIMITED",
+   "MAHARASHTRA",
+   "tier2"
+  ],
+  [
+   "U12345KA2010NPL123456",
+   "XYZ LIMITED",
+   "GUJARAT",
+   "tier2"
+  ],
+  [
+   "U12345KA2010NPL123456",
+   "XYZ LIMITED",
+   "KARNATAKA",
+   "tier1"
+  ],
+  [
+   "U12345KA2010NPL123456",
+   "XYZ LIMITED",
+   null,
+   "parked"
+  ],
+  [
+   "U12345KA2010OPC123456",
+   "ABC PVT LTD",
+   "MAHARASHTRA",
+   null
+  ],
+  [
+   "U12345KA2010OPC123456",
+   "ABC PVT LTD",
+   "GUJARAT",
+   null
+  ],
+  [
+   "U12345KA2010OPC123456",
+   "ABC PVT LTD",
+   "KARNATAKA",
+   "tier1"
+  ],
+  [
+   "U12345KA2010OPC123456",
+   "ABC PVT LTD",
+   null,
+   "parked"
+  ],
+  [
+   "U12345KA2010OPC123456",
+   "XYZ LIMITED",
+   "MAHARASHTRA",
+   null
+  ],
+  [
+   "U12345KA2010OPC123456",
+   "XYZ LIMITED",
+   "GUJARAT",
+   null
+  ],
+  [
+   "U12345KA2010OPC123456",
+   "XYZ LIMITED",
+   "KARNATAKA",
+   "tier1"
+  ],
+  [
+   "U12345KA2010OPC123456",
+   "XYZ LIMITED",
+   null,
+   "parked"
+  ]
+ ],
+ "usable": {
+  "A & B Co. Pvt Ltd": [
+   false,
+   false
+  ],
+  "ABC (P) LTD": [
+   true,
+   false
+  ],
+  "Foods Private Limited": [
+   false,
+   false
+  ],
+  "Reliance Industries Limited": [
+   true,
+   false
+  ],
+  "SOLAR PROJECTS LIMITED": [
+   false,
+   false
+  ],
+  "Sun Pharma Limited, Mumbai": [
+   true,
+   false
+  ],
+  "THE Bharat Ltd": [
+   true,
+   false
+  ],
+  "Tata Steel Ltd.": [
+   true,
+   false
+  ],
+  "XYZ PVT.LTD": [
+   false,
+   false
+  ],
+  "Xy": [
+   false,
+   false
+  ]
+ }
+}
