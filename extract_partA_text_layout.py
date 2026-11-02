@@ -66,7 +66,7 @@ MEMO = re.compile(r"Memorandum\s*No\.?\s*:?\s*(\d+)\s*Date\s*:?\s*(\d{2}/\d{2}/\
 
 
 def parse_text(pages, source_file):
-    rows, state, cur = [], None, None
+    rows, state = [], None
     lines = [(p, ln) for p, t in pages for ln in t.splitlines()]
     i = 0
     while i < len(lines):

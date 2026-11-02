@@ -4,7 +4,7 @@
    new 9-column layout (2018+)                                  -> parse_partB_new.parse_pdf (already in partB_new.parquet)
    anything the new parser skipped                              -> text-layout fallback
 """
-import glob, os, subprocess
+import glob, os
 from pathlib import Path
 import pandas as pd
 import extract_partA_text_layout as T

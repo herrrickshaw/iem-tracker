@@ -19,7 +19,7 @@ from pathlib import Path
 import duckdb, pandas as pd
 from dateutil import parser as dparse
 
-from iem_verify import key, find_state, usable
+from iem_verify import key, find_state
 
 BASE = Path(__file__).resolve().parent
 

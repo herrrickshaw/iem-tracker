@@ -59,8 +59,7 @@ def gutter_columns(doc, pos, roles):
             for x in range(int(w[0]), int(w[2]) + 1): cov[x] = cov.get(x, 0) + 1
     if not cov: return None
     peak = max(cov.values()); lo, hi = min(cov), max(cov)
-    low = [x for x in range(lo, hi + 1) if cov.get(x, 0) <= 0.02 * peak]
-    blocks, start, prev = [], None, None
+    blocks, start = [], None
     for x in range(lo, hi + 1):
         empty = cov.get(x, 0) <= 0.02 * peak
         if not empty and start is None: start = x
