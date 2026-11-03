@@ -1,5 +1,4 @@
 """Synthetic inputs + snapshot helpers for the Pass 3 characterisation tests (no real PDFs, no network, temp dirs only)."""
-import hashlib
 import json
 import os
 import sys

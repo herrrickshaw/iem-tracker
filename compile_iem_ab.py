@@ -56,9 +56,8 @@ def load_b():
     return b
 
 
-def main():
-    a, b = load_a(), load_b()
-    print(f"Part A filings: {len(a)}  | Part B records: {len(b)}")
+def link_part_b(a, b):
+    """Tie each Part A filing to Part B: number+date (strong), then same-company name (weaker). Mutates and returns `a`."""
     # --- strong link: number + date
     bk = {}
     for r in b.dropna(subset=["mem_no", "m_date"]).itertuples():
@@ -77,7 +76,11 @@ def main():
         if later: a.at[i, "link"] = "name"; a.at[i, "b_month"] = min(later)
     a["year"] = a.month.str[:4]
     a["has_b"] = a.link != "none"
+    return a
 
+
+def load_company_identity():
+    """Company-level identification results (web/registry lookups + LEI verdicts); empty frame when unavailable."""
     # --- company level: identification results from the web/registry lookups
     co = pd.DataFrame()
     try:
@@ -98,17 +101,32 @@ def main():
                                           "new": "identified via LEI register"}).fillna(co.id_source.map(lambda x: "name match, not checkable (no LEI)" if isinstance(x, str) else ""))
     except Exception as e:
         print("note: iem_verify.duckdb or gleif_verdict unavailable:", str(e)[:70])
+    return co
+
+
+def add_registry_matches(co):
+    """Fill missing CIN/status from IEM_registry_matches.csv (MATCHED rows only)."""
     reg = BASE / "IEM_registry_matches.csv"
     if reg.exists() and len(co):
         r = pd.read_csv(reg); r["state"] = r.state.fillna(""); r = r[r.verdict == "MATCHED"][["k", "state", "cin", "status"]]
         co = co.merge(r.rename(columns={"cin": "c3", "status": "s3"}), on=["k", "state"], how="left")
         m = co.cin.isna() & co.c3.notna(); co.loc[m, "cin"] = co.loc[m, "c3"]; co.loc[m, "mca_status"] = co.loc[m, "s3"]; co.loc[m, "id_source"] = "registry"
         co = co.drop(columns=["c3", "s3"])
+    return co
+
+
+def merge_identity(a, co):
+    """Attach identity columns to the filings (or blank defaults when there is no company-level data)."""
     if len(co):
         keep = [c_ for c_ in ["k", "state", "cin", "mca_status", "id_source", "usable", "identity", "lei_status", "lei_next_renewal"] if c_ in co.columns]
         a = a.merge(co[keep].drop_duplicates(["k", "state"]), on=["k", "state"], how="left")
     else:
         a = a.assign(cin=None, mca_status=None, id_source=None, usable=True)
+    return a
+
+
+def add_mca_evidence(a):
+    """Merge the current MCA record (Apify actor, by CIN) and derive `operating_evidence` / `mca_defaulter`."""
     # current MCA record (Apify actor, by CIN): live status, last AGM and balance sheet, compliance flags
     ap = BASE / "apify_mca.csv"
     if ap.exists():
@@ -124,12 +142,21 @@ def main():
         weak = has & ~((a.mca_live_status == "Active") & (a.last_agm >= "2025-01-01") & (a.last_balance_sheet >= "2025-03-31") & ~a.mca_defaulter)
         a.loc[weak, "operating_evidence"] = "MCA record: Active but filings lag, or flagged"
         a.loc[has & (a.mca_live_status != "Active"), "operating_evidence"] = "MCA record: not Active"
+    return a
+
+
+def flag_candidates(a):
+    """Derive usable / support_candidate / verified_active flags."""
     a["usable"] = a.usable.fillna(True).astype(bool)
     inactive = a.mca_status.fillna("").str.lower().str.contains("strike|amalgam|liquidat|dissol|closed|cirp")
     a["support_candidate"] = (~a.has_b) & a.usable & ~inactive & (a.month >= "2021-01")
     a["identity"] = a["identity"] if "identity" in a else ""
     a["verified_active"] = a.mca_status.fillna("").str.lower().eq("active") & ~a.identity.fillna("").str.startswith("CONFLICT")
+    return a
 
+
+def rollup_companies(a, b, co):
+    """Per-company roll-up of Part A filings, outer-joined with Part B-only companies."""
     # --- per-company roll-up
     comp = (a.groupby(["k", "state"]).agg(name=("company_name", "last"), filings=("month", "size"), first_month=("month", "min"),
                                           last_month=("month", "max"), filings_with_b=("has_b", "sum"),
@@ -145,7 +172,11 @@ def main():
     allc = pd.concat([comp, only_b], ignore_index=True)
     allc["in_part_a"] = allc.filings.fillna(0) > 0
     allc["in_part_b"] = allc.n_part_b.fillna(0) > 0
+    return allc
 
+
+def write_outputs(a, allc):
+    """Write the xlsx workbook and both parquet files, then print the summary."""
     # --- outputs
     cand = a[a.support_candidate].copy()
     cand["filing_age_yrs"] = (2026.75 - (cand.month.str[:4].astype(float) + (cand.month.str[5:7].astype(float) - 1) / 12)).round(1)
@@ -178,6 +209,19 @@ def main():
     print(summ.tail(12).to_string(index=False))
     print(f"candidates (filings): {len(cand)} | companies: {cand.k.nunique()} | with CIN: {int(cand.cin.notna().sum())} "
           f"| verified active: {int(cand.verified_active.sum())}\nwrote {out}")
+
+
+def main():
+    a, b = load_a(), load_b()
+    print(f"Part A filings: {len(a)}  | Part B records: {len(b)}")
+    a = link_part_b(a, b)
+    co = load_company_identity()
+    co = add_registry_matches(co)
+    a = merge_identity(a, co)
+    a = add_mca_evidence(a)
+    a = flag_candidates(a)
+    allc = rollup_companies(a, b, co)
+    write_outputs(a, allc)
 
 
 if __name__ == "__main__":

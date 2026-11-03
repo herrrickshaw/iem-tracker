@@ -85,13 +85,8 @@ def parse_wide_annual(ws, label_col_name):
     return data
 
 
-def main():
-    if DB.exists():
-        DB.unlink()
-    con = duckdb.connect(str(DB))
-
-    # ── 1. iem_documents ──────────────────────────────────────────────────
-    wb = openpyxl.load_workbook(CATALOGUE, read_only=True, data_only=True)
+def build_documents(con, wb):
+    """iem_documents: one row per catalogue entry joined to the local PDF / .md text where present."""
     cat_rows = load_catalogue_rows(wb, "Part A – company lists", "A") + \
                load_catalogue_rows(wb, "Part B – company lists", "B")
     con.execute("""
@@ -129,7 +124,9 @@ def main():
         inserted += 1
     print(f"iem_documents: {inserted} rows")
 
-    # ── 2. iem_dropbox_copies (2024 detailed reports) ─────────────────────
+
+def build_dropbox_copies(con):
+    """iem_dropbox_copies: 2024 detailed reports, byte-identical copies collapsed via md5."""
     con.execute("""
         CREATE TABLE iem_dropbox_copies (
             file_name VARCHAR, md5 VARCHAR, size_bytes BIGINT, part VARCHAR,
@@ -151,7 +148,9 @@ def main():
     print(f"iem_dropbox_copies: {len(dropbox_rows)} files, "
           f"{sum(1 for r in dropbox_rows if r[1] not in seen or seen[r[1]] == r[0])} canonical")
 
-    # ── 3. annual tables from the Dropbox analysis workbook ───────────────
+
+def build_annual_tables(con):
+    """annual_states / annual_sectors / annual_trends from the Dropbox analysis workbook."""
     awb = openpyxl.load_workbook(ANALYSIS, read_only=True, data_only=True)
     con.execute("CREATE TABLE annual_states (part VARCHAR, state VARCHAR, year INTEGER, iem_count DOUBLE, investment_rs_cr DOUBLE)")
     con.execute("CREATE TABLE annual_sectors (part VARCHAR, sector VARCHAR, year INTEGER, iem_count DOUBLE, investment_rs_cr DOUBLE)")
@@ -170,7 +169,9 @@ def main():
     print("annual_states:", con.execute("select count(*) from annual_states").fetchone()[0],
           "| annual_sectors:", con.execute("select count(*) from annual_sectors").fetchone()[0])
 
-    # ── 4. catalogue aggregate statistics ─────────────────────────────────
+
+def build_catalogue_aggregates(con, wb):
+    """catalogue_aggregates: aggregate-statistics documents listed in the DPIIT catalogue."""
     agg = list(wb["Aggregate statistics"].iter_rows(values_only=True))
     con.execute("CREATE TABLE catalogue_aggregates (part VARCHAR, header VARCHAR, dpiit_title VARCHAR, pages INTEGER, pdf_link VARCHAR, dpiit_doc_id BIGINT)")
     for r in agg[1:]:
@@ -179,7 +180,9 @@ def main():
         con.execute("INSERT INTO catalogue_aggregates VALUES (?,?,?,?,?,?)",
                     [r[0], r[1], r[2], r[4], r[6], r[8]])
 
-    # ── 5. part_a_records (anchor-matched; format-dependent) ──────────────
+
+def build_part_a_records(con):
+    """part_a_records: anchor-matched rows from the Part A .md text (format-dependent)."""
     con.execute("CREATE TABLE part_a_records (iem_seq INTEGER, iem_year INTEGER, filing_date VARCHAR, source_doc VARCHAR)")
     for md in sorted(glob.glob(str(BASE / "md" / "PartA" / "*.md"))):
         normalized = re.sub(r"\s+", " ", open(md).read())
@@ -188,6 +191,17 @@ def main():
                         [int(seq), int(year), date, Path(md).name])
     print("part_a_records:", con.execute("select count(*) from part_a_records").fetchone()[0])
 
+
+def main():
+    if DB.exists():
+        DB.unlink()
+    con = duckdb.connect(str(DB))
+    wb = openpyxl.load_workbook(CATALOGUE, read_only=True, data_only=True)
+    build_documents(con, wb)
+    build_dropbox_copies(con)
+    build_annual_tables(con)
+    build_catalogue_aggregates(con, wb)
+    build_part_a_records(con)
     con.close()
     print(f"wrote {DB}")
 

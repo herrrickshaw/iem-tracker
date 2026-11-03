@@ -191,6 +191,129 @@ def stream_names(doc, pos, cols, serial_edge):
     return names
 
 
+def _page_header_bottom(words, pos):
+    """(header_found, y of the bottom of the repeated header block) for one page; bottom is -1 when there is none."""
+    hdr_y = [w for w in words if w[4] in ("Company", "District") and abs(w[0] - pos[w[4]][0]) < 15]
+    hdr_bottom = -1
+    if hdr_y:
+        y0 = min(w[1] for w in hdr_y)
+        hdr_bottom = max((w[3] for w in words if w[4] in HDR_WORDS and y0 - 3 <= w[1] <= y0 + 48), default=-1)
+    return bool(hdr_y), hdr_bottom
+
+
+def _serial_starts(body, cols, serial_edge, last_serial):
+    """[(y_start, serial)] for the records starting on this page, plus the updated running serial.
+    Serial numbers can be split into single digits, side by side or stacked ("1" over "0" = 10).
+    Chain digits that touch (same line, or same x with a <=14pt vertical gap); try the whole chain first,
+    then fall back to each digit, and always require the running count to go up."""
+    raw = sorted([w for w in body if col_of(w[0], cols, serial_edge, w[4]) == "serial"], key=lambda w: (w[1], w[0]))
+    chains, cur_ch = [], []
+    for w in raw:
+        if cur_ch and (abs(w[1] - cur_ch[-1][1]) < 2 or (abs(w[0] - cur_ch[-1][0]) < 3 and 0 < w[1] - cur_ch[-1][1] <= 14)):
+            cur_ch.append(w)
+        else:
+            if cur_ch: chains.append(cur_ch)
+            cur_ch = [w]
+    if cur_ch: chains.append(cur_ch)
+    starts = []
+    for ch in chains:
+        cands = ["".join(x[4] for x in ch)] + ([x[4] for x in ch] if len(ch) > 1 else [])
+        whole = cands[0]
+        if whole.isdigit() and last_serial < int(whole) <= last_serial + 6:
+            starts.append((ch[0][1] - 3, int(whole))); last_serial = int(whole)
+        else:
+            for x in ch:
+                n = int(x[4])
+                if last_serial < n <= last_serial + 6:
+                    starts.append((x[1] - 3, n)); last_serial = n
+    return starts, last_serial
+
+
+def _bucket_words(body, starts, cols, serial_edge):
+    """Group non-serial words by the record (index into `starts`) whose start y is the last one <= word y; None = before the first."""
+    buckets = {}
+    for w in body:
+        c = col_of(w[0], cols, serial_edge, w[4])
+        if c == "serial": continue
+        idx = None
+        for i, (sy, _) in enumerate(starts):
+            if w[1] >= sy: idx = i
+            else: break
+        buckets.setdefault(idx, []).append((c, w))
+    return buckets
+
+
+def _collect_records(doc, pos, cols, serial_edge):
+    """Walk the pages and return (records, pre-serial words). Each record is {serial, page, sy, w:[(column, word)]}."""
+    recs, cur, last_serial, pre = [], None, 0, []
+    for pno, page in enumerate(doc, 1):
+        words = page.get_text("words")
+        has_hdr, hdr_bottom = _page_header_bottom(words, pos)   # skip the repeated header block on this page
+        title_cut = hdr_bottom if hdr_bottom > 0 else (-1)
+        body = [w for w in words if w[1] > title_cut]
+        if not has_hdr:   # continuation page without header: drop any "STATEMENT ON ..." title lines
+            body = [w for w in body if w[1] > 0]
+        starts, last_serial = _serial_starts(body, cols, serial_edge, last_serial)
+        buckets = _bucket_words(body, starts, cols, serial_edge)
+        if None in buckets and cur is not None:
+            for c, w in buckets[None]: cur["w"].append((c, w))
+        elif None in buckets and cur is None:
+            pre = buckets[None]
+        for i, (sy, sn) in enumerate(starts):
+            cur = {"serial": sn, "page": pno, "sy": sy + 3, "w": list(buckets.get(i, []))}
+            recs.append(cur)
+    return recs, pre
+
+
+def _record_row(r, iem_left, method):
+    """One output dict from a collected record: company name, district/item text and the IEM no/date block."""
+    by = {}
+    for c, w in sorted(r["w"], key=lambda t: (round(t[1][1] / 3), t[1][0])):
+        by.setdefault(c, []).append(w[4])
+    lines = {}
+    for c, w in r["w"]:
+        if c == "company": lines.setdefault(round(w[1] / 3), []).append(w)
+    sy = r["sy"]
+    ltxt = [" ".join(x[4] for x in sorted(lw, key=lambda x: x[0])) for _, lw in sorted(lines.items())
+            if min(x[1] for x in lw) >= sy - 3 or r["page"] != r.get("p0", r["page"])]
+    ltxt = [t for t in ltxt if not re.match(r"\s*Place\s*\(Tehsil\)", t, re.I)]
+    comp = " ".join(ltxt)
+    name, ok = cut_name(comp)
+    iw = sorted([(round(w[1] / 3), w[0], w[4]) for c, w in r["w"] if w[0] >= iem_left])
+    iem_text = " ".join(t for _, _, t in iw)
+    iem_text = re.sub(r"\b([A-Za-z]{3,8}) ([a-z])\b(?=\s+\d{4}\b)", r"\1\2", iem_text)   # "Januar y" -> "January"
+    m = IEM_NO_RE.search(iem_text)
+    dm = DATE_RE.findall(iem_text)
+    mon = re.search(r"(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})", iem_text)
+    lead = re.match(r"\s*(\d{1,5})\b", iem_text)
+    if not m and mon:
+        rest = re.sub(r"\b(19|20)\d{2}\b", " ", iem_text)
+        rest = re.sub(r"\b\d{1,2}\s+[A-Za-z]{3,9}\b", " ", rest)
+        nums = re.findall(r"\b\d{1,5}\b", rest)
+        lead = re.match(r"(\d+)", nums[0]) if nums else None
+    return {"serial": r["serial"], "page": r["page"], "company_name": name, "name_has_suffix": ok,
+            "company_text": comp, "district_state": " ".join(by.get("district", [])),
+            "item": " ".join(by.get("item", [])),
+            "iem_no": int(m.group(1)) if m else (int(lead.group(1)) if lead and mon else None),
+            "iem_year": (int(dm[-1][-4:]) if dm else (int(mon.group(3)) if mon else None)) if (m or mon) else None,
+            "filing_date": dm[-1] if dm else (" ".join(mon.groups()) if mon else None),
+            "iem_text": iem_text, "layout": method}
+
+
+def _repair_mid_serial(out, recs, pre):
+    """Serial sits mid-record: record i's name is the last legal-name phrase of block i-1 (record 1: pre-serial lines)."""
+    def toks(ws):
+        cw = sorted([w for c, w in ws if c == "company"], key=lambda w: (round(w[1] / 3), w[0]))
+        return [w[4] for w in cw]
+    blocks = [toks(pre)] + [toks(r["w"]) for r in recs]
+    for i, r in enumerate(out):
+        nm = last_phrase(blocks[i])
+        if nm:
+            r["company_name"], r["name_has_suffix"], r["layout"] = nm, True, "mid-serial"
+    for r in out:
+        if r["layout"] != "mid-serial": r["layout"] = "mid-serial-unresolved"
+
+
 def parse_pdf(path):
     doc = pymupdf.open(path)
     pos = header_positions(doc)
@@ -200,106 +323,11 @@ def parse_pdf(path):
     serial_edge = serial_x_of(doc, pos["Company"][0])
     iem_left = iem_left_of(doc, cols, pos["IEM"][0]) if "IEM" in pos else None
     iem_left = iem_left or (dict(cols).get("iem", 1e9) - 10)
-    recs, cur, last_serial, pre = [], None, 0, []
-    for pno, page in enumerate(doc, 1):
-        words = page.get_text("words")
-        # skip the repeated header block on this page
-        hdr_y = [w for w in words if w[4] in ("Company", "District") and abs(w[0] - pos[w[4]][0]) < 15]
-        hdr_bottom = -1
-        if hdr_y:
-            y0 = min(w[1] for w in hdr_y)
-            hdr_bottom = max((w[3] for w in words if w[4] in HDR_WORDS and y0 - 3 <= w[1] <= y0 + 48), default=-1)
-        title_cut = hdr_bottom if hdr_bottom > 0 else (-1)
-        body = [w for w in words if w[1] > title_cut]
-        if not hdr_y:   # continuation page without header: drop any "STATEMENT ON ..." title lines
-            body = [w for w in body if w[1] > 0]
-        raw = sorted([w for w in body if col_of(w[0], cols, serial_edge, w[4]) == "serial"], key=lambda w: (w[1], w[0]))
-        # Serial numbers can be split into single digits, side by side or stacked ("1" over "0" = 10).
-        # Chain digits that touch (same line, or same x with a <=14pt vertical gap); try the whole chain first,
-        # then fall back to each digit, and always require the running count to go up.
-        chains, cur_ch = [], []
-        for w in raw:
-            if cur_ch and (abs(w[1] - cur_ch[-1][1]) < 2 or (abs(w[0] - cur_ch[-1][0]) < 3 and 0 < w[1] - cur_ch[-1][1] <= 14)):
-                cur_ch.append(w)
-            else:
-                if cur_ch: chains.append(cur_ch)
-                cur_ch = [w]
-        if cur_ch: chains.append(cur_ch)
-        starts = []
-        for ch in chains:
-            cands = ["".join(x[4] for x in ch)] + ([x[4] for x in ch] if len(ch) > 1 else [])
-            whole = cands[0]
-            if whole.isdigit() and last_serial < int(whole) <= last_serial + 6:
-                starts.append((ch[0][1] - 3, int(whole))); last_serial = int(whole)
-            else:
-                for x in ch:
-                    n = int(x[4])
-                    if last_serial < n <= last_serial + 6:
-                        starts.append((x[1] - 3, n)); last_serial = n
-        buckets = {}
-        for w in body:
-            c = col_of(w[0], cols, serial_edge, w[4])
-            if c == "serial": continue
-            # find record whose start y is the last one <= word y; words before first serial continue previous record
-            idx = None
-            for i, (sy, _) in enumerate(starts):
-                if w[1] >= sy: idx = i
-                else: break
-            buckets.setdefault(idx, []).append((c, w))
-        if None in buckets and cur is not None:
-            for c, w in buckets[None]: cur["w"].append((c, w))
-        elif None in buckets and cur is None:
-            pre = buckets[None]
-        for i, (sy, sn) in enumerate(starts):
-            cur = {"serial": sn, "page": pno, "sy": sy + 3, "w": list(buckets.get(i, []))}
-            recs.append(cur)
-    out = []
-    for r in recs:
-        by = {}
-        for c, w in sorted(r["w"], key=lambda t: (round(t[1][1] / 3), t[1][0])):
-            by.setdefault(c, []).append(w[4])
-        lines = {}
-        for c, w in r["w"]:
-            if c == "company": lines.setdefault(round(w[1] / 3), []).append(w)
-        sy = r["sy"]
-        ltxt = [" ".join(x[4] for x in sorted(lw, key=lambda x: x[0])) for _, lw in sorted(lines.items())
-                if min(x[1] for x in lw) >= sy - 3 or r["page"] != r.get("p0", r["page"])]
-        ltxt = [t for t in ltxt if not re.match(r"\s*Place\s*\(Tehsil\)", t, re.I)]
-        comp = " ".join(ltxt)
-        name, ok = cut_name(comp)
-        iw = sorted([(round(w[1] / 3), w[0], w[4]) for c, w in r["w"] if w[0] >= iem_left])
-        iem_text = " ".join(t for _, _, t in iw)
-        iem_text = re.sub(r"\b([A-Za-z]{3,8}) ([a-z])\b(?=\s+\d{4}\b)", r"\1\2", iem_text)   # "Januar y" -> "January"
-        m = IEM_NO_RE.search(iem_text)
-        dm = DATE_RE.findall(iem_text)
-        mon = re.search(r"(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})", iem_text)
-        lead = re.match(r"\s*(\d{1,5})\b", iem_text)
-        if not m and mon:
-            rest = re.sub(r"\b(19|20)\d{2}\b", " ", iem_text)
-            rest = re.sub(r"\b\d{1,2}\s+[A-Za-z]{3,9}\b", " ", rest)
-            nums = re.findall(r"\b\d{1,5}\b", rest)
-            lead = re.match(r"(\d+)", nums[0]) if nums else None
-        out.append({"serial": r["serial"], "page": r["page"], "company_name": name, "name_has_suffix": ok,
-                    "company_text": comp, "district_state": " ".join(by.get("district", [])),
-                    "item": " ".join(by.get("item", [])),
-                    "iem_no": int(m.group(1)) if m else (int(lead.group(1)) if lead and mon else None),
-                    "iem_year": (int(dm[-1][-4:]) if dm else (int(mon.group(3)) if mon else None)) if (m or mon) else None,
-                    "filing_date": dm[-1] if dm else (" ".join(mon.groups()) if mon else None),
-                    "iem_text": iem_text, "layout": method})
+    recs, pre = _collect_records(doc, pos, cols, serial_edge)
+    out = [_record_row(r, iem_left, method) for r in recs]
     bad = sum(1 for r in out if len(r["company_name"]) > 60 or not r["name_has_suffix"])
     if out and bad / len(out) > 0.25:
-        # Serial sits mid-record: record i's name is the last legal-name phrase of block i-1 (record 1: pre-serial lines).
-        def toks(ws):
-            cw = sorted([w for c, w in ws if c == "company"], key=lambda w: (round(w[1] / 3), w[0]))
-            return [w[4] for w in cw]
-        blocks = [toks(pre)] + [toks(r["w"]) for r in recs]
-        fixed = 0
-        for i, r in enumerate(out):
-            nm = last_phrase(blocks[i])
-            if nm:
-                r["company_name"], r["name_has_suffix"], r["layout"] = nm, True, "mid-serial"; fixed += 1
-        for r in out:
-            if r["layout"] != "mid-serial": r["layout"] = "mid-serial-unresolved"
+        _repair_mid_serial(out, recs, pre)
     return out, "ok"
 
 
