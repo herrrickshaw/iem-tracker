@@ -14,7 +14,7 @@ A match is rejected if the CIN's incorporation year is after the company's last 
 
   python3 gleif_join.py            # writes gleif_join.csv and a summary; add --apply to store verdicts in a table `gleif_verdict`
 """
-import argparse, re, sys
+import argparse, sys
 from pathlib import Path
 import duckdb, pandas as pd
 

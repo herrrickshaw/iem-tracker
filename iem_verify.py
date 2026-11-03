@@ -131,7 +131,7 @@ def stage_extract(a):
         df["st"] = df.state.fillna("")
         df = df.drop(columns=["cin", "status", "src", "score"]).merge(prior, on=["key", "st"], how="left").drop(columns=["st"])
         print(f"carried over {int(df.cin.notna().sum())} earlier CIN results")
-    except Exception:
+    except duckdb.CatalogException:   # first build: no earlier `co` table to carry over
         pass
     k.execute("""create or replace table co as select row_number() over () id, name, key, state, confident, usable,
         n_part_a, first_iem, last_iem, item, part_b_hit, in_part_b, n_part_b, last_part_b::varchar last_part_b, cin::varchar cin, status::varchar status, src::varchar src,
@@ -228,6 +228,21 @@ def _fetch(slug, gate):
     return cin, (st.group(1).strip() if st and "Paid" not in st.group(1) else None), None, None
 
 
+TIER1, TIER2, PARKED = "tier1", "tier2", "parked"
+
+
+def web_match_tier(cin, name, state):
+    """Two-tier rule for a web hit. The IEM state is the PLANT state, the CIN state is the REGISTERED-OFFICE state.
+    tier1: CIN state == IEM state. tier2: states differ but the CIN company class (private/public, chars 13-15)
+    agrees with the name. parked: IEM state unknown (kept as a candidate only). None: rejected."""
+    want = "PTC" if re.search(r"\b(PVT|PRIVATE)\b|\(P\)", name.upper()) else "PLC"
+    class_ok = cin[12:15] in (want, "NPL", "GAP", "GOI", "FTC", "FLC", "PTC" if want == "PTC" else "PLC")
+    if state and CIN_STATE.get(cin[6:8]) == state: return TIER1
+    if state and class_ok: return TIER2
+    if not state: return PARKED
+    return None
+
+
 def stage_web(a):
     """Name + state lookup on a free site. Faster than the first version: threads share one rate limit (--rps),
     the slug variant implied by the legal suffix is tried first (one request for most companies), pages already
@@ -269,15 +284,13 @@ def stage_web(a):
             cid, state, cin, st, fetched = f.result()
             for row in fetched: k.execute("insert or replace into web_cache values(?,?,?,?,?)", list(row))
             if cin:
-                nm = names[cid]
-                want = "PTC" if re.search(r"\b(PVT|PRIVATE)\b|\(P\)", nm.upper()) else "PLC"
-                class_ok = cin[12:15] in (want, "NPL", "GAP", "GOI", "FTC", "FLC", "PTC" if want == "PTC" else "PLC")
-                if state and CIN_STATE.get(cin[6:8]) == state:
+                tier = web_match_tier(cin, names[cid], state)
+                if tier == TIER1:
                     k.execute("update co set cin=?,status=?,src='web-slug+state',score=90 where id=?", [cin, st, cid]); got += 1
-                elif state and class_ok:
+                elif tier == TIER2:
                     # plant state (IEM) differs from registered-office state (CIN): the page is the exact-name company; keep as tier 2
                     k.execute("update co set cin=?,status=?,src='web-slug-name-only',score=70 where id=?", [cin, st, cid]); tier2 += 1
-                elif not state:
+                elif tier == PARKED:
                     k.execute("update co set cand=? where id=? and cin is null",
                               [json.dumps([{"cin": cin, "name": "web", "status": st}]), cid]); parked += 1
             if i % 50 == 0: print(f"  {i}/{len(todo)}  accepted {got}  ({time.time()-t0:.0f}s)", flush=True)

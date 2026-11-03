@@ -14,10 +14,8 @@ Layout (x positions in PDF points, stable across the SIA/IMO-era files):
 Records are assembled across page breaks because the serial number keeps counting.
 Each record also keeps the raw line text for auditing.
 """
-import glob
 import re
 import sys
-from pathlib import Path
 
 import pymupdf
 

@@ -12,13 +12,13 @@ so it complements, not replaces, the registry lookups.
 
 Rate: one request per second (GLEIF documents 60/minute). Results cached in gleif_cache.csv; reruns skip cached names.
 """
-import argparse, csv, re, sys, time
+import argparse, csv, sys, time
 from pathlib import Path
 
 import duckdb, pandas as pd, requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from iem_verify import CIN_STATE, key
+from iem_verify import CIN_STATE
 from registry_match import mca_variants
 
 BASE = Path(__file__).resolve().parent

@@ -9,7 +9,7 @@ LEI registration status and renewal dates (a company that keeps renewing its LEI
 
   python3 gleif_bulk.py            # run or resume (1 request/second); then:  python3 gleif_bulk.py --parquet
 """
-import argparse, json, sys, time
+import argparse, json, time
 from pathlib import Path
 
 import requests

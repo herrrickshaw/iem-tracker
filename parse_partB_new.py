@@ -117,7 +117,6 @@ def parse_pdf(path):
         for r, nm in zip(out, mid):
             if nm: r["company_name"], r["name_has_suffix"] = nm, True
         # centred cells: attach each Location word to the nearest serial line instead of the bucket it fell in
-        ys = [(sy, i) for i, (sy, _) in enumerate(((x["w"][0][1][1] if x["w"] else 0, 0) for x in recs))]
     for r in out: r["layout"] = "mid-serial" if use_mid else "top"
     LEAD = {"NU", "NA", "GM", "NIL", "NULL", ",", ".", "-"}
     def clean(nm):

@@ -10,7 +10,7 @@ page after about ten rapid requests, so it is unusable in bulk.)
   python3 cin_status_check.py run --limit 5000      # any identified CINs, Part B first
 Results cached in cin_status.csv (resumable). 4 requests/second shared across 4 threads.
 """
-import argparse, csv, html, re, subprocess, sys, threading, time
+import argparse, csv, html, re, subprocess, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import duckdb, pandas as pd
