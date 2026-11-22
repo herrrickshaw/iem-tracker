@@ -330,7 +330,7 @@ def test_main_since_filters_old_filings(base, run_main, capsys):
 
 def test_main_tries_next_variant_only_when_first_is_empty(base, run_main):
     write_a(base, coords=[("2021-01", "THE A & B MILLS LTD", True, "SURAT GUJARAT", "f.pdf")])
-    s = FakeSession(fn=answer({"A AND B MILLS LIMITED": [rec("A AND B MILLS LIMITED", CIN_GJ)]}))
+    s = FakeSession(fn=answer({"THE A AND B MILLS LIMITED": [rec("THE A AND B MILLS LIMITED", CIN_GJ)]}))
     run_main(session=s)
     asked = [c[1]["filters[company_name]"] for c in s.calls]
     assert asked == ["THE A & B MILLS LIMITED", "THE A AND B MILLS LIMITED"]      # stops after the second variant hits
