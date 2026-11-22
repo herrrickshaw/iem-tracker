@@ -580,3 +580,11 @@ def test_extract_key_length_boundary(base):
     write_a(base, [("2018-01", 1, "ABCD LTD", "t", True, "GOA", "X", "f.pdf"), ("2018-01", 2, "ABC LTD", "t", True, "GOA", "X", "f.pdf")])
     iv.stage_extract(SimpleNamespace())
     assert list(table()["name"]) == ["ABCD LTD"]
+
+
+def test_fetch_does_not_sleep_when_gate_opens_exactly_now(monkeypatch):
+    import threading
+    sleeps = []
+    gate = {"lock": threading.Lock(), "next": 100.0, "gap": 0.5}
+    run_fetch(monkeypatch, "", gate=gate, now=100.0, sleeps=sleeps)
+    assert sleeps == []
