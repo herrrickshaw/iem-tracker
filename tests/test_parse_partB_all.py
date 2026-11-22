@@ -1,5 +1,7 @@
-"""parse_partB_all is a top-level script. Execute its source with __file__ pointing into tmp_path (so its BASE is
-tmp_path) and the text-layout parser faked, then check the merged partB_all.parquet and the printed summary."""
+"""parse_partB_all is a top-level script. Execute the real source file (so coverage sees it) with its
+`Path(__file__).resolve()` redirected into tmp_path, so BASE is tmp_path, and the text-layout parser faked; then check
+the merged partB_all.parquet and the printed summary."""
+import pathlib
 from pathlib import Path
 
 import pandas as pd
@@ -24,6 +26,11 @@ def old_row(name, state, month, mem_no, mem_date, src, suffix=True):
 def run(tmp_path, monkeypatch):
     (tmp_path / "PartB").mkdir()
     code = compile(SCRIPT.read_text(), str(SCRIPT), "exec")
+    real_resolve = pathlib.Path.resolve
+
+    def resolve(self, *a, **k):                       # only the script's own `Path(__file__).resolve()` is redirected
+        return tmp_path / "parse_partB_all.py" if self == SCRIPT else real_resolve(self, *a, **k)
+    monkeypatch.setattr(pathlib.Path, "resolve", resolve)
 
     def go(new, files, parsed):
         new_rows(new).to_parquet(tmp_path / "partB_new.parquet")
@@ -35,7 +42,7 @@ def run(tmp_path, monkeypatch):
             calls.append(Path(path).name)
             return [dict(r) for r in parsed.get(Path(path).name, [])], 0
         monkeypatch.setattr(T, "parse_file", fake_parse)
-        exec(code, {"__file__": str(tmp_path / "parse_partB_all.py"), "__name__": "parse_partB_all_script"})
+        exec(code, {"__file__": str(SCRIPT), "__name__": "parse_partB_all_script"})
         return pd.read_parquet(tmp_path / "partB_all.parquet"), calls
     return go
 
