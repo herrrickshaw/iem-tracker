@@ -1,7 +1,5 @@
-"""parse_partB_all is a top-level script. Run a copy of it from tmp_path (so its BASE is tmp_path) with the
-text-layout parser faked, and check the merged partB_all.parquet and the printed summary."""
-import runpy
-import shutil
+"""parse_partB_all is a top-level script. Execute its source with __file__ pointing into tmp_path (so its BASE is
+tmp_path) and the text-layout parser faked, then check the merged partB_all.parquet and the printed summary."""
 from pathlib import Path
 
 import pandas as pd
@@ -24,8 +22,8 @@ def old_row(name, state, month, mem_no, mem_date, src, suffix=True):
 
 @pytest.fixture
 def run(tmp_path, monkeypatch):
-    shutil.copy(SCRIPT, tmp_path / "parse_partB_all.py")
     (tmp_path / "PartB").mkdir()
+    code = compile(SCRIPT.read_text(), str(SCRIPT), "exec")
 
     def go(new, files, parsed):
         new_rows(new).to_parquet(tmp_path / "partB_new.parquet")
@@ -37,7 +35,7 @@ def run(tmp_path, monkeypatch):
             calls.append(Path(path).name)
             return [dict(r) for r in parsed.get(Path(path).name, [])], 0
         monkeypatch.setattr(T, "parse_file", fake_parse)
-        runpy.run_path(str(tmp_path / "parse_partB_all.py"), run_name="not_main")
+        exec(code, {"__file__": str(tmp_path / "parse_partB_all.py"), "__name__": "parse_partB_all_script"})
         return pd.read_parquet(tmp_path / "partB_all.parquet"), calls
     return go
 
