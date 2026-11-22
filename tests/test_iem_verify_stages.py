@@ -537,3 +537,46 @@ def test_master_without_required_columns_asserts(base, tmp_path):
     pd.DataFrame({"foo": [1]}).to_csv(p, index=False)
     with pytest.raises(AssertionError, match="need CIN"):
         iv.stage_master(SimpleNamespace(master=str(p)))
+
+
+# --------------------------------------------------------------------------- thresholds (found by mutation testing)
+def _match_one(base, query_name, masters):
+    write_master(base, [(cin("GJ", serial=f"{i:06d}"), n + " PRIVATE LIMITED", "Active") for i, n in enumerate(masters, 1)])
+    make_co([{"name": query_name + " PVT LTD", "state": "GUJARAT"}])
+    iv.stage_match(SimpleNamespace(limit=None))
+    return table().iloc[0]
+
+
+def test_match_score_just_below_96_is_reviewed_not_accepted(base):
+    q = "ALPHA " + "B" * 14                                     # token_sort_ratio against the master is exactly 95.0
+    r = _match_one(base, q, ["ALPHA " + "B" * 13 + "C"])
+    assert pd.isna(r.cin) and r.score == 95.0
+    assert [c["cin"] for c in json.loads(r.cand)] == [cin("GJ", serial="000001")]
+
+
+def test_match_margin_of_exactly_four_points_is_accepted(base):
+    q = "ALPHA " + "B" * 19                                     # 96.0 vs the best master, 92.0 vs the runner-up
+    r = _match_one(base, q, ["ALPHA " + "B" * 18 + "C", "ALPHA " + "B" * 17 + "CC"])
+    assert r.src == "master-fuzzy" and r.cin == cin("GJ", serial="000001") and r.score == 96.0
+
+
+def test_match_margin_below_four_points_is_reviewed(base):
+    q = "ALPHA " + "B" * 19
+    r = _match_one(base, q, ["ALPHA " + "B" * 18 + "C", "ALPHA " + "B" * 18 + "D"])
+    assert pd.isna(r.cin) and len(json.loads(r.cand)) == 2
+
+
+def test_match_score_of_exactly_80_goes_to_review(base):
+    r = _match_one(base, "ALPHA BBBB", ["ALPHA BBCC"])
+    assert pd.isna(r.cin) and r.score == 80.0 and len(json.loads(r.cand)) == 1
+
+
+def test_match_score_below_80_is_dropped(base):
+    r = _match_one(base, "ALPHA BBBB", ["ALPHA BCCC"])
+    assert pd.isna(r.cin) and pd.isna(r.cand)
+
+
+def test_extract_key_length_boundary(base):
+    write_a(base, [("2018-01", 1, "ABCD LTD", "t", True, "GOA", "X", "f.pdf"), ("2018-01", 2, "ABC LTD", "t", True, "GOA", "X", "f.pdf")])
+    iv.stage_extract(SimpleNamespace())
+    assert list(table()["name"]) == ["ABCD LTD"]
