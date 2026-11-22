@@ -165,3 +165,17 @@ def test_parse_serial_may_be_indented_up_to_eight_spaces(monkeypatch):
     bad = " " * 9 + "6" + " " * 5 + "BETA CEMENT LTD"
     recs, _ = run_parse(monkeypatch, [HEADER, ok, bad])
     assert [r["serial"] for r in recs] == [5]
+
+
+def test_split_record_default_district_end_is_one_before_item():
+    cols = {"Company": 6, "District": 36, "Item": 66}
+    ln = list(" " * 200); ln[64] = "A"; ln[65] = "B"
+    r = pl.split_record("".join(ln), cols)
+    assert r["district"].endswith("A") and r["state_text"] == "B"
+
+
+def test_split_record_default_capacity_start_is_item_plus_sixty():
+    cols = {"Company": 6, "District": 36, "Item": 66}
+    ln = list(" " * 250); ln[66 + 59] = "I"; ln[66 + 60] = "Z"
+    r = pl.split_record("".join(ln), cols)
+    assert r["item"].endswith("I") and "Z" not in r["item"] and r["capacity_text"].startswith("Z")

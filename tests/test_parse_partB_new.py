@@ -265,3 +265,18 @@ def test_parse_pdf_glued_commas_are_spaced_and_stripped(pdf):
     rows, _ = pb.parse_pdf(pdf(top_layout(names=names)))
     assert rows[0]["company_name"] == "ALPHA STEELS PVT.LTD"
     assert " , " in rows[0]["company_text"]
+
+
+def test_parse_pdf_top_layout_kept_when_scores_tie(pdf):
+    names = list(NAMES); names[5] = "ZETA PAPERS WORKS"            # top scores 5/6; mid can score at most 5 (record 1 has no previous block)
+    rows, _ = pb.parse_pdf(pdf(top_layout(names=names)))
+    assert {r["layout"] for r in rows} == {"top"} and rows[5]["company_name"].startswith("ZETA PAPERS WORKS")
+
+
+def test_parse_pdf_serial_jump_of_seven_is_rejected(pdf):
+    items = list(HDR)
+    for i, sn in enumerate(["1", "8", "9", "10", "11", "12"], 1):
+        y = 80 + i * 30
+        items += [(60, y, NAMES[i - 1])] + [w for w in body(y, 1) if w[0] != 30] + [(30, y, sn)]
+    rows, _ = pb.parse_pdf(pdf(items))
+    assert [r["serial"] for r in rows] == [1]

@@ -144,3 +144,12 @@ def test_parse_pdf_raw_lines_kept_for_audit(tmp_path):
     items = HEADER + record(70, 1, "ALPHA STEELS PVT LTD", "PUNE", "MAHARASHTRA", "STEEL", "300", "MT", "12/N/SIA/IMO/2019", "05/03/2019")
     r = ps.parse_pdf(make_pdf(tmp_path / "a.pdf", [items]))[0]
     assert len(r["raw"]) == 2 and "ALPHA STEELS PVT LTD" in r["raw"][0] and "05/03/2019" in r["raw"][1]
+
+
+def test_parse_pdf_records_ten_points_apart_are_not_merged_into_one_line(tmp_path):
+    items = list(HEADER)
+    for i in (1, 2, 3):
+        y = 60 + 10 * i
+        items += [(30, y, str(i)), (90, y, f"CO{i} LTD"), (222, y, "PUNE"), (482, y, f"{i}/N/SIA/IMO/2019")]
+    recs = ps.parse_pdf(make_pdf(tmp_path / "a.pdf", [items]))
+    assert [r["serial"] for r in recs] == [1, 2, 3]

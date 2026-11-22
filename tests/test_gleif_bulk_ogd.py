@@ -155,14 +155,14 @@ def test_main_progress_line_every_20_pages(gbase, monkeypatch, capsys):
 
 
 def test_main_parquet_dedups_and_summarises(gbase, monkeypatch, capsys):
-    rows = [gb.slim(full_record(lei="L1")), gb.slim(full_record(lei="L1")),
+    rows = [gb.slim(full_record(lei="L1")), gb.slim(full_record(lei="L1")), gb.slim(full_record(lei="L3")),
             {**gb.slim(full_record(lei="L2")), "ra": "RA000999", "e_status": "INACTIVE"}]
     (gbase / "gleif_india.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     run_gb(monkeypatch, Pager({}), "--parquet")
     df = pd.read_parquet(gbase / "gleif_india.parquet")
-    assert sorted(df.lei) == ["L1", "L2"]
+    assert sorted(df.lei) == ["L1", "L2", "L3"]
     out = capsys.readouterr().out
-    assert "2 records; 1 with an MCA CIN; {" in out and "'ACTIVE': 1" in out and "'INACTIVE': 1" in out
+    assert "3 records; 2 with an MCA CIN; {" in out and "'ACTIVE': 2" in out and "'INACTIVE': 1" in out
 
 
 # --------------------------------------------------------------------------- ogd_fetch_master

@@ -292,3 +292,24 @@ def test_parse_file_returns_rows_and_ocr_page_count(monkeypatch):
     rows, n_ocr = t.parse_file("/x/2012-05_a.pdf")
     assert len(rows) == 1 and rows[0]["source_file"] == "2012-05_a.pdf" and rows[0]["month"] == "2012-05"
     assert n_ocr == 1                                   # the short page still counts as needing OCR even if OCR failed
+
+
+def test_text_pages_blank_middle_page_is_still_ocred(monkeypatch):
+    monkeypatch.setattr(t.subprocess, "run", Run("x" * 150 + "\f" + "\f" + "y" * 150 + "\f"))
+    monkeypatch.setattr(t, "ocr_page", lambda pdf, i: f"OCR{i}")
+    assert dict(t.text_pages("f.pdf")) == {1: "x" * 150, 2: "OCR2", 3: "y" * 150}
+
+
+@pytest.mark.parametrize("indent,joined", [(5, True), (7, True), (8, False)])
+def test_wrapped_name_continuation_indent_limit(indent, joined):
+    # the name starts at column 5; a continuation may start at most 2 columns further right
+    rows = parse(["STATE : GUJARAT", "   1 GEMINI EDIBILES & FATS INDIA        KRISHNA         OIL", " " * indent + "PRIVATE LIMITED."])
+    assert rows[0]["company_name"].endswith("PRIVATE LIMITED") is joined
+
+
+@pytest.mark.parametrize("n,joined", [(45, True), (46, False)])
+def test_wrapped_name_continuation_length_limit(n, joined):
+    cont = "X" * (n - len(" PRIVATE LIMITED")) + " PRIVATE LIMITED"
+    assert len(cont) == n
+    rows = parse(["STATE : GUJARAT", "   1 GEMINI EDIBILES        KRISHNA         OIL", "     " + cont])
+    assert rows[0]["company_name"].endswith("PRIVATE LIMITED") is joined

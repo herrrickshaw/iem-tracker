@@ -414,3 +414,40 @@ def test_stream_names_reads_legal_names_from_the_company_column(pdf):
     cols, serial_edge, _ = pc.infer_columns(d, pos)
     got = pc.stream_names(d, pos, cols, serial_edge)
     assert [n for _, n in got] == NAMES and {p for p, _ in got} == {1}
+
+
+def test_stream_names_walks_back_at_most_ten_tokens(pdf):
+    items = [it for it in mid_serial(NAMES) if it[2] != NAMES[0]]
+    items += [(60, 62, "AA BB CC DD EE FF GG"), (60, 70, "HH II JJ KK LL MM PVT LTD")]
+    d = pymupdf.open(pdf(items))
+    pos = pc.header_positions(d)
+    cols, serial_edge, _ = pc.infer_columns(d, pos)
+    first = pc.stream_names(d, pos, cols, serial_edge)[0][1].split()
+    assert first == "CC DD EE FF GG HH II JJ KK LL MM PVT LTD".split()[-12:]      # 10 tokens back from the suffix, plus the 2-token suffix
+
+
+def _std(pdf, names):
+    items = list(HEADER)
+    for i, n in enumerate(names, 1):
+        items += rec(70 + i * 30, i, n, "PLOT 5", DIST[i - 1], STATE[i - 1])
+    return pc.parse_pdf(pdf(items))[0]
+
+
+def test_two_bad_names_of_six_trigger_the_mid_serial_pass(pdf):
+    names = list(NAMES); names[1] = "BETA CEMENT WORKS"; names[3] = "DELTA DYES WORKS"
+    assert {r["layout"] for r in _std(pdf, names)} <= {"mid-serial", "mid-serial-unresolved"}
+
+
+def test_one_bad_name_of_four_is_exactly_the_threshold_and_does_not_trigger(pdf):
+    names = list(NAMES[:4]); names[1] = "BETA CEMENT WORKS"
+    assert {r["layout"] for r in _std(pdf, names)} == {"gutter"}
+
+
+def test_iem_column_cluster_needs_five_line_starts(pdf):
+    def with_unit(n):
+        items = list(HEADER)
+        for i in range(1, n + 1):
+            items += rec(70 + i * 30, i, NAMES[i - 1], "PLOT 5", DIST[i - 1], STATE[i - 1]) + [(445, 70 + i * 30, "UNIT"), (470, 70 + i * 30, "MT")]
+        return pc.parse_pdf(pdf(items))[0]
+    assert "MT" in with_unit(4)[0]["iem_text"]          # 4 line starts: no strong cluster -> fallback edge (iem column - 10)
+    assert "MT" not in with_unit(5)[0]["iem_text"]      # 5 line starts: cluster found, edge = cluster - 3
