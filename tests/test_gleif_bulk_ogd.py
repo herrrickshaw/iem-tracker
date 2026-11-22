@@ -252,3 +252,15 @@ def test_ogd_extra_fields_in_later_pages_are_ignored(ogd_run):
     table = {"goa": [{"cin": "C1"}, {"cin": "C2", "surprise": "x"}]}
     ogd_run(pages_by_state(table, 1), "--states", "goa", "--page", "1")
     assert list(csv.DictReader(open(ogd_run.out)))[1]["cin"] == "C2"
+
+
+def test_main_retries_exactly_500(gbase, monkeypatch, capsys):
+    sleeps = []
+    monkeypatch.setattr(gb.time, "sleep", sleeps.append)
+    run_gb(monkeypatch, Pager({gb.U: {"data": [full_record(lei="L1")], "links": {}}}, bad=[Resp(500)]))
+    assert sleeps[:1] == [10] and "done: 1 records" in capsys.readouterr().out
+
+
+def test_main_status_499_is_not_retried(gbase, monkeypatch):
+    with pytest.raises(RuntimeError, match="HTTP 499"):
+        run_gb(monkeypatch, Pager({}, bad=[Resp(499)]))
