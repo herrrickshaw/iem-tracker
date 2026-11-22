@@ -132,7 +132,7 @@ def test_load_b_normalises_names_filters_and_dates(base):
     assert list(b.k) == ["ALPHA STEELS", "BETA CEMENT"]
     assert list(b.state) == ["", "GUJARAT"]                                   # NaN state -> ""
     assert b.m_date.tolist()[0] == "05/03/2021"
-    assert b.m_date.tolist()[1] is None
+    assert pd.isna(b.m_date.tolist()[1])                                          # None under pandas<3, NaN under pandas>=3
 
 
 # --------------------------------------------------------------------------- main
