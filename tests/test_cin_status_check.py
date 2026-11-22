@@ -201,3 +201,10 @@ def test_main_creates_output_file_before_run(env, monkeypatch):
     assert not (env / "cin_status.csv").exists()
     main(monkeypatch, "run", "--limit", "1")
     assert (env / "cin_status.csv").exists()
+
+
+def test_main_sample_agm_on_1_january_2025_counts_as_2025(env, monkeypatch, capsys):
+    make_db(env, [(CIN1, "Active", "web", False)])
+    fake_curl(monkeypatch, {CIN1: page(CIN1, agm="01 January 2025")})
+    main(monkeypatch, "sample", "--n", "1")
+    assert "last AGM in 2025 or later: 100% | 2024 or later: 100%" in capsys.readouterr().out

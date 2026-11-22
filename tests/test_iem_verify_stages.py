@@ -588,3 +588,12 @@ def test_fetch_does_not_sleep_when_gate_opens_exactly_now(monkeypatch):
     gate = {"lock": threading.Lock(), "next": 100.0, "gap": 0.5}
     run_fetch(monkeypatch, "", gate=gate, now=100.0, sleeps=sleeps)
     assert sleeps == []
+
+
+def test_match_same_name_in_two_states_without_plant_state_is_not_even_a_candidate(base):
+    write_master(base, [(cin("GJ", serial="000001"), "ALPHA STEELS PRIVATE LIMITED", "Active"),
+                        (cin("MH", serial="000002"), "ALPHA STEELS PRIVATE LIMITED", "Active")])
+    make_co([{"name": "ALPHA STEELS PVT LTD", "state": None}])
+    iv.stage_match(SimpleNamespace(limit=None))
+    co = table()
+    assert pd.isna(co.cin.iloc[0]) and pd.isna(co.cand.iloc[0])           # cleared as 'not identity', nothing handed to review
