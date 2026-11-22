@@ -390,3 +390,56 @@ def test_main_apify_agm_on_cutoff_is_strong(base, capsys):
     run_main(base, capsys)
     linked = pd.read_parquet(base / "iem_partA_filings_linked.parquet").set_index("company_name")
     assert linked.loc["GAMMA GLASS PRIVATE LIMITED", "operating_evidence"] == "MCA record: Active but filings lag, or flagged"
+
+
+# --------------------------------------------------------------------------- survivors of the first mutation pass
+def test_load_b_keeps_a_four_character_key(base):
+    partb([("abcd ltd", "GOA", "2022-01", 1, "1/1/2021", None, "f.pdf", True),
+           ("abc ltd", "GOA", "2022-01", 2, "1/1/2021", None, "f.pdf", True)]).to_parquet(base / "partB_all.parquet")
+    assert list(c.load_b().name) == ["ABCD LTD"]
+
+
+@pytest.mark.parametrize("a_state,b_state,linked", [
+    ("PUNE MAHARASHTRA", "", True),          # Part B state unknown
+    ("NOWHERE", "GOA", True),                # Part A state unknown
+    ("NOWHERE", "", True),
+    ("PUNE MAHARASHTRA", "GOA", False),
+    ("PUNE MAHARASHTRA", "MAHARASHTRA", True),
+])
+def test_name_link_state_rule(base, capsys, a_state, b_state, linked):
+    coords([("ALPHA STEELS PRIVATE LIMITED", True, a_state, "X", "2021-03", 1, "1/3/2021", "f.pdf", 1)]).to_parquet(base / "partA_coords.parquet")
+    text([]).to_parquet(base / "partA_text_layout.parquet")
+    partb([("ALPHA STEELS LTD", b_state, "2022-01", 99, "1/1/2000", None, "b.pdf", True)]).to_parquet(base / "partB_all.parquet")
+    c.main()
+    capsys.readouterr()
+    assert (pd.read_parquet(base / "iem_partA_filings_linked.parquet").link.iloc[0] == "name") is linked
+
+
+def test_main_cirp_status_excludes_candidate(base, capsys):
+    db_inputs(base)
+    build_db(base)
+    k = duckdb.connect(str(base / "iem_verify.duckdb"))
+    k.execute("update co set status='Under CIRP' where key='ETA TEXTILES'")
+    k.close()
+    out, xl = run_main(base, capsys)
+    assert "ETA TEXTILES LIMITED" not in set(xl["Candidates"].company_name)
+
+
+def test_main_companies_without_a_gleif_verdict_keep_null_status(base, capsys):
+    db_inputs(base)
+    build_db(base)
+    run_main(base, capsys)
+    linked = pd.read_parquet(base / "iem_partA_filings_linked.parquet").set_index("company_name")
+    z = linked.loc["ZETA PAPERS LIMITED"]
+    assert pd.isna(z.mca_status) and pd.isna(z.cin)                    # no verdict row: not treated as a 'new' LEI identification
+
+
+def test_number_date_link_uses_first_part_b_record_for_duplicate_keys(base, capsys):
+    coords([("ALPHA STEELS PRIVATE LIMITED", True, "PUNE MAHARASHTRA", "X", "2021-03", 10, "5/3/2021", "f.pdf", 1)]).to_parquet(base / "partA_coords.parquet")
+    text([]).to_parquet(base / "partA_text_layout.parquet")
+    partb([("ALPHA STEELS LTD", "MAHARASHTRA", "2022-01", 10, "5/3/2021", "01/01/2022", "b1.pdf", True),
+           ("ALPHA STEELS LTD", "MAHARASHTRA", "2023-06", 10, "5/3/2021", "01/01/2023", "b2.pdf", True)]).to_parquet(base / "partB_all.parquet")
+    c.main()
+    capsys.readouterr()
+    r = pd.read_parquet(base / "iem_partA_filings_linked.parquet").iloc[0]
+    assert r.link == "number+date" and r.b_month == "2022-01" and r.b_commenced == "01/01/2022"
